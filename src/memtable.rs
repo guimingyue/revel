@@ -11,3 +11,33 @@
 // limitations under the License.
 
 //! memtable
+
+use crate::skiplist::SkipList;
+
+type Table = SkipList<Vec<u8>>;
+
+pub struct MemTable {
+    
+    table: Box<Table>
+    
+}
+
+impl MemTable {
+    
+    pub fn new(comparator: fn(a: &Vec<u8>, b: &Vec<u8>) -> std::cmp::Ordering) -> Self {
+        MemTable {
+            table: Box::new(Table::new(comparator))
+        }
+    }
+    
+    pub fn add(mut self, value: Vec<u8>) {
+        self.table.insert(value)
+    }
+}
+
+#[test]
+fn test() {
+    let func = |a: &Vec<u8>, b: &Vec<u8>| a.cmp(b);
+    let mut mem = MemTable::new(func);
+    mem.add(vec!['a' as u8])
+}
