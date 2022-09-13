@@ -191,7 +191,7 @@ impl<K> SkipList<K> where K: Default {
 
 impl<'a, K> Iter<'a, K> where K: Default {
     
-    pub fn new(list: &SkipList<K>) -> Self {
+    pub fn new(list: &'a SkipList<K>) -> Self {
         Iter {
             list,
             node: None
@@ -227,10 +227,11 @@ impl<'a, K> Iter<'a, K> where K: Default {
     pub fn prev(&mut self) {
         assert!(self.valid());
         let key = &self.node.unwrap().key;
-        let pre = self.list.find_less_than(key);
-        // todo!() fix this
-        if pre.unwrap() == &self.list.head {
-            self.node = None;
+        self.node = self.list.find_less_than(key);
+        if let Some(n) = self.node {
+            if Self::ref_eq(n, &self.list.head) {
+                self.node = None;
+            }
         }
     }
 
@@ -255,12 +256,15 @@ impl<'a, K> Iter<'a, K> where K: Default {
     /// Final state of iterator is Valid() iff list is not empty.
     pub fn seek_to_last(&mut self) {
         self.node = self.list.find_last();
-        // todo!() fix this
         if let Some(n) = self.node {
-            if n == &self.list.head {
+            if Self::ref_eq(n, &self.list.head) {
                 self.node = None;
             }
         }
+    }
+    
+    fn ref_eq<T>(r1: &T, r2: &T) -> bool {
+        r1 as *const T == r2 as *const T
     }
 }
 

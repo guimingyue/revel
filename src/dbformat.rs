@@ -10,20 +10,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::{Display, Formatter};
-use std::io;
-use std::sync::PoisonError;
-use crate::error::Error;
+pub type SequenceNumber = u64;
 
-pub type Result<T = (), E = Error> = std::result::Result<T, E>;
+pub enum ValueType {
+    
+    kTypeDeletion = 0x0,
+    
+    kTypeValue = 0x1
+}
 
-pub mod db;
-pub mod error;
-pub mod slice;
+pub struct LookupKey {
+    // todo!()
+}
 
-mod memtable;
-mod log;
-mod fs;
-mod filename;
-mod skiplist;
-mod dbformat;
+impl LookupKey {
+    
+    pub fn new() -> Self {
+        // todo!()
+        LookupKey{}
+    }
+}

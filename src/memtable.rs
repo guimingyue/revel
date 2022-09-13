@@ -12,7 +12,11 @@
 
 //! memtable
 
+use crate::dbformat::{LookupKey, SequenceNumber, ValueType};
+use crate::Error;
+use crate::Error::NotFound;
 use crate::skiplist::SkipList;
+use crate::slice::Slice;
 
 type Table = SkipList<Vec<u8>>;
 
@@ -30,14 +34,23 @@ impl MemTable {
         }
     }
     
-    pub fn add(mut self, value: Vec<u8>) {
-        self.table.insert(value)
+    pub fn add(&mut self, seq: SequenceNumber, valueType: ValueType, key: &Slice, value: &Slice) {
+        // todo!()
+        let mut buf = vec![];
+        self.table.insert(buf)
     }
+
+    /// If memtable contains a value for key, return (true, Ok(Vec<u8)).
+    /// If memtable contains a deletion for key, return (true, Err(NotFound))
+    /// Else, return (false,Err(NotFound).
+    pub fn get(&self, key: &LookupKey) -> (bool, Result<Vec<u8>, Error>) {
+        (false, Err(NotFound))
+    } 
 }
 
 #[test]
 fn test() {
     let func = |a: &Vec<u8>, b: &Vec<u8>| a.cmp(b);
     let mut mem = MemTable::new(func);
-    mem.add(vec!['a' as u8])
+    mem.add(1, ValueType::kTypeValue, &Slice::from_empty(), &Slice::from_empty())
 }
