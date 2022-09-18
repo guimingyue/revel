@@ -39,7 +39,7 @@ pub struct SkipList<K> where K: Default {
     
 }
 
-struct Iter<'a, K> where K: Default {
+pub struct Iter<'a, K> where K: Default {
     
     list: &'a SkipList<K>,
     
@@ -264,7 +264,7 @@ impl<'a, K> Iter<'a, K> where K: Default {
     }
     
     fn ref_eq<T>(r1: &T, r2: &T) -> bool {
-        r1 as *const T == r2 as *const T
+        std::ptr::eq(r1, r2)
     }
 }
 
