@@ -11,6 +11,7 @@
 // limitations under the License.
 
 //! memtable
+use std::cmp::Ordering;
 use crate::coding::{decode_fixed64, encode_fixed64, encode_varint32, get_varint32, varint_length};
 use crate::dbformat::{compare, LookupKey, SequenceNumber, ValueType};
 use crate::Error;
@@ -21,8 +22,6 @@ use crate::slice::Slice;
 type Table = SkipList<Vec<u8>>;
 
 pub struct MemTable {
-
-    comparator: fn(a: &K, b: &K) -> std::cmp::Ordering,
     
     table: Box<Table>
 }
@@ -31,7 +30,6 @@ impl MemTable {
     
     pub fn new(comparator: fn(a: &Vec<u8>, b: &Vec<u8>) -> std::cmp::Ordering) -> Self {
         MemTable {
-            comparator,
             table: Box::new(Table::new(comparator))
         }
     }
@@ -92,26 +90,33 @@ impl MemTable {
             // Check that it belongs to same user key.  We do not check the
             // sequence number since the Seek() call above should have skipped
             // all entries with overly large sequence numbers.
-            let key = iter.key();
-            let (key_length, mut offset) = get_varint32(key, 0, 5)?;
-            if compare(&Slice::from_bytes(&key[0..(key_length-8)]), key.user_key()) {
-                let tag = decode_fixed64(buf, key_length - 8);
-                match (tag & 0xff) as ValueType {
-                    ValueType::KTypeValue => {
-                        let slice = Self::get_length_prefixed_slice(key, key_length);
-                        return (true, Ok(slice.data().to_vec()));
-                    },
-                    ValueType::KTypeDeletion => {
-                        return (true, Err(NotFound));
+            let buf = iter.key();
+            let result = get_varint32(buf, 0, 5);
+            return match result {
+                Ok((key_length, mut offset)) => {
+                    if compare(&Slice::from_bytes(&buf[0..(key_length-8)]), &key.user_key()) == Ordering::Equal {
+                        let tag = decode_fixed64(buf, key_length - 8);
+                        return match ValueType::from((tag & 0xff) as u8) {
+                            ValueType::KTypeValue => {
+                                let slice = Self::get_length_prefixed_slice(buf, key_length);
+                                (true, Ok(slice.data().to_vec()))
+                            },
+                            ValueType::KTypeDeletion => {
+                                (true, Err(NotFound))
+                            }
+                        }
                     }
-                }
+                    return (false, Err(NotFound))
+                },
+                Err(_) => (false, Err(NotFound))
             }
         }
         (false, Err(NotFound))
     } 
     
     fn get_length_prefixed_slice(buf: &[u8], offset: usize) -> Slice {
-        let (key_length, new_offset) = get_varint32(buf, 5, offset)?;
+        // todo!("fix unwrap")
+        let (key_length, new_offset) = get_varint32(buf, 5, offset).unwrap();
         Slice::from_bytes(&buf[new_offset..(new_offset + key_length)])
     }
 }

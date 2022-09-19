@@ -25,6 +25,17 @@ pub enum ValueType {
     KTypeValue = 0x1
 }
 
+impl ValueType {
+    
+    pub fn from(ordinal: u8) -> Self {
+        match ordinal { 
+            ox0 => ValueType::KTypeDeletion,
+            0x1 => ValueType::KTypeValue,
+            _ => panic!("Unknown ValueType ordinal")
+        }
+    }
+}
+
 static kValueTypeForSeek: ValueType = ValueType::KTypeValue;
 
 pub struct LookupKey {
