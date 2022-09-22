@@ -56,7 +56,7 @@ impl LookupKey {
         let needed = usize + 13;
         let mut buf = Vec::with_capacity(needed);
         let start = 0;
-        let writed = encode_varint32(&mut buf, usize + 8, 0);
+        let writed = encode_varint32(&mut buf, usize as u32 + 8, 0);
         let kstart = writed;
         unsafe {
             std::ptr::copy(user_key.data().as_ptr(), buf.as_mut_ptr().offset(kstart as isize), usize);

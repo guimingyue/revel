@@ -11,34 +11,35 @@
 // limitations under the License.
 
 use std::fs::File;
+use std::io::Write;
 
-pub fn encode_varint32(buf: &mut [u8], v: usize, offset: usize) -> usize {
-    const B: usize = 128;
+pub fn encode_varint32(buf: &mut [u8], v: u32, offset: usize) -> usize {
+    const B: i32 = 128;
     let ptr = buf[offset..].as_mut_ptr();
     unsafe {
         if v < (1 << 7) {
             ptr.write(v as u8);
             1
         } else if v < (1 << 14) {
-            ptr.write((v | B) as u8);
+            ptr.write((v as i32 | B) as u8);
             ptr.offset(1).write((v >> 7) as u8);
             2
         } else if v < (1 << 21) {
-            ptr.write((v | B) as u8);
-            ptr.offset(1).write(((v >> 7) | B) as u8);
+            ptr.write((v as i32 | B) as u8);
+            ptr.offset(1).write(((v >> 7) as i32 | B) as u8);
             ptr.offset(2).write((v >> 14) as u8);
             3
         } else if v < (1 << 28) {
-            ptr.write((v | B) as u8);
-            ptr.offset(1).write(((v >> 7) | B) as u8);
-            ptr.offset(2).write(((v >> 14) | B) as u8);
+            ptr.write((v as i32 | B) as u8);
+            ptr.offset(1).write(((v >> 7) as i32 | B) as u8);
+            ptr.offset(2).write(((v >> 14) as i32 | B) as u8);
             ptr.offset(3).write((v >> 21) as u8);
             4
         } else {
-            ptr.write((v | B) as u8);
-            ptr.offset(1).write(((v >> 7) | B) as u8);
-            ptr.offset(2).write(((v >> 14) | B) as u8);
-            ptr.offset(3).write(((v >> 21) | B) as u8);
+            ptr.write((v as i32 | B) as u8);
+            ptr.offset(1).write(((v >> 7) as i32 | B) as u8);
+            ptr.offset(2).write(((v >> 14) as i32 | B) as u8);
+            ptr.offset(3).write(((v >> 21) as i32 | B) as u8);
             ptr.offset(4).write((v >> 28) as u8);
             5
         }
@@ -77,18 +78,33 @@ pub fn varint_length(mut v: u64) -> usize {
 /// plus the number of bytes that read , or return
 /// an error. These routines only look at bytes in the range
 /// [p..limit-1]
-pub fn get_varint32(buf: &[u8], offset: usize, limit: usize) -> Result<(usize, usize), &str> {
-    if buf.len() + offset < limit {
-        let result = buf[0];
+pub fn get_varint32(buf: &[u8], offset: usize, limit: usize) -> Result<(u32, usize), &str> {
+    if offset < limit {
+        let result = buf[offset];
         if result & 128 == 0 {
-            return Ok((result as usize, 1));
+            return Ok((result as u32, 1));
         }
     }
     get_varint32_fallback(buf, offset, limit)
 }
 
-fn get_varint32_fallback(buf: &[u8], offset: usize, limit: usize) -> Result<(usize, usize), &str> {
-    Err("todo!()")
+/// fallback path of get_varint32
+fn get_varint32_fallback(buf: &[u8], offset: usize, limit: usize) -> Result<(u32, usize), &str> {
+    let mut result: u32 = 0;
+    let mut new_offset = offset;
+    let mut shift = 0;
+    while shift <= 28 && new_offset < limit {
+        let byte = buf[new_offset] as u32;
+        new_offset += 1;
+        if byte & 128 != 0 {
+            result |= (byte & 127) << shift
+        } else {
+            result |= byte << shift;
+            return Ok((result, new_offset - offset));
+        }
+        shift += 7;
+    }
+    Err("")
 }
 
 pub fn decode_fixed64(buf: &[u8], offset: usize) -> u64 {
@@ -102,5 +118,39 @@ pub fn decode_fixed64(buf: &[u8], offset: usize) -> u64 {
             (*buffer.offset(5) as u64) << 40 |
             (*buffer.offset(6) as u64) << 48 |
             (*buffer.offset(7) as u64) << 56
+    }
+}
+
+pub fn put_varint32(dst: &mut Vec<u8>, v: u32) -> usize {
+    let mut buf = vec![0;5];
+    let size = encode_varint32(&mut buf, v, 0);
+    dst.write(&buf[..size]).expect("put varint32 failed")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env::var;
+    use std::fmt::format;
+    use super::*;
+    
+    #[test]
+    fn test_coding_varint32() {
+        let mut s = Vec::new();
+        let mut offset = 0;
+        for i in 0..32 * 32 {
+            let v = (i / 32) << (i % 32);
+            let put_size = put_varint32(&mut s, v);
+            offset += put_size;
+        }
+        
+        let limit = s.len();
+        offset = 0;
+        for i in 0..32 * 32 {
+            let expected = (i / 32) << (i % 32);
+            let (actual, var_size) = get_varint32(&s, offset, limit).expect(format!("get varint32 failed, index: {}", i).as_str());
+            assert_eq!(expected, actual, "failed, index: {}", i);
+            assert_eq!(varint_length(actual as u64), var_size, "failed, index: {}", i);
+            offset += var_size;
+        }
     }
 }

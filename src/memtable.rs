@@ -55,14 +55,14 @@ impl MemTable {
             + val_size;
         let mut buf = Vec::with_capacity(encoded_len);
         
-        let mut offset = encode_varint32(&mut buf, internal_key_size, 0);
+        let mut offset = encode_varint32(&mut buf, internal_key_size as u32, 0);
         unsafe {
             std::ptr::copy(key.data().as_ptr(), buf.as_mut_ptr().offset(offset as isize), key_size)
         }
         offset += key_size;
         encode_fixed64(&mut buf, (seq << 8) | valueType as u64, offset);
         offset += 8;
-        encode_varint32(&mut buf, val_size, offset);
+        encode_varint32(&mut buf, val_size as u32, offset);
         unsafe {
             std::ptr::copy(value.data().as_ptr(), buf.as_mut_ptr().offset(offset as isize), val_size);
         }
@@ -94,11 +94,11 @@ impl MemTable {
             let result = get_varint32(buf, 0, 5);
             return match result {
                 Ok((key_length, mut offset)) => {
-                    if compare(&Slice::from_bytes(&buf[0..(key_length-8)]), &key.user_key()) == Ordering::Equal {
-                        let tag = decode_fixed64(buf, key_length - 8);
+                    if compare(&Slice::from_bytes(&buf[0..(key_length-8) as usize]), &key.user_key()) == Ordering::Equal {
+                        let tag = decode_fixed64(buf, key_length as usize - 8);
                         return match ValueType::from((tag & 0xff) as u8) {
                             ValueType::KTypeValue => {
-                                let slice = Self::get_length_prefixed_slice(buf, key_length);
+                                let slice = Self::get_length_prefixed_slice(buf, key_length as usize);
                                 (true, Ok(slice.data().to_vec()))
                             },
                             ValueType::KTypeDeletion => {
@@ -117,7 +117,7 @@ impl MemTable {
     fn get_length_prefixed_slice(buf: &[u8], offset: usize) -> Slice {
         // todo!("fix unwrap")
         let (key_length, new_offset) = get_varint32(buf, 5, offset).unwrap();
-        Slice::from_bytes(&buf[new_offset..(new_offset + key_length)])
+        Slice::from_bytes(&buf[new_offset..(new_offset + key_length as usize)])
     }
 }
 
