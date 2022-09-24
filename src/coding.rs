@@ -153,4 +153,24 @@ mod tests {
             offset += var_size;
         }
     }
+
+    #[test]
+    fn test_coding_varint32_overflow() {
+        let input = vec![129, 130, 131, 132, 133, 17];
+        let result = get_varint32(input.as_slice(), 0, input.len());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_coding_varint32_truncation() {
+        let large_value = (1u32 << 31) + 100;
+        let mut buf = vec![];
+        put_varint32(&mut buf, large_value);
+        for len in 0..buf.len() {
+            let result = get_varint32(buf.as_slice(), 0, len);
+            assert!(result.is_err());
+        }
+        let result = get_varint32(buf.as_slice(), 0, buf.len()).expect("large value truncation failed");
+        assert_eq!(large_value, result.0)
+    }
 }
