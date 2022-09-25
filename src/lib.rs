@@ -25,3 +25,4 @@ mod filename;
 mod skiplist;
 mod dbformat;
 mod coding;
+mod random;
