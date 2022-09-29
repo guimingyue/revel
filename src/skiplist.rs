@@ -10,7 +10,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::iter::Iterator;
 use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
@@ -95,12 +94,12 @@ impl<K> SkipList<K> where K: Default {
             }
             self.max_height.store(height, Ordering::Relaxed);
         }
-        let mut new_node = Node::new_node(key, height);
+        let new_node = Box::new(Node::new_node(key, height));
+        let new_node_ptr = Box::into_raw(new_node);
         for i in 0..height {
             unsafe {
                 let pre_next = (*prev[i]).no_barrier_next(i);
-                new_node.no_barrier_set_next(i, pre_next);
-                let new_node_ptr: *mut Node<K> = &mut new_node as *mut Node<K>;
+                (*new_node_ptr).no_barrier_set_next(i, pre_next);
                 (&mut *(prev[i] as *mut Node<K>)).no_barrier_set_next(i, new_node_ptr);
             }
         }
@@ -120,11 +119,6 @@ impl<K> SkipList<K> where K: Default {
         let mut level = self.get_max_height() - 1;
         loop {
             let next: *const Node<K> = unsafe {(*x).no_barrier_next(level)};
-            if !next.is_null() {
-                let next_key = unsafe{&(*next).key};
-                println!("")
-            }
-
             if self.key_is_after_node(key, next) {
                 x = next;
             } else {
@@ -135,7 +129,7 @@ impl<K> SkipList<K> where K: Default {
                     return if x.is_null() {
                         (None, Box::new(prev))
                     } else {
-                        unsafe { (Some(&*x), Box::new(prev)) }
+                        unsafe { (Some(&*next), Box::new(prev)) }
                     }
                 }
                 level -= 1;
@@ -151,7 +145,7 @@ impl<K> SkipList<K> where K: Default {
         }
         assert!(height > 0);
         assert!(height <= MAX_HEIGHT);
-        return 3;
+        height
     }
     
     fn get_max_height(&self) -> usize {
@@ -159,15 +153,7 @@ impl<K> SkipList<K> where K: Default {
     }
 
     fn key_is_after_node(&self, key: &K, n: *const Node<K>) -> bool {
-        // todo!()
-        let is_null = n.is_null();
         unsafe {
-            let a = &(*n).key;
-            let b = key;
-            if !n.is_null() {
-                let eq = self.compare(&(*n).key, key);
-                println!("")
-            }
             !n.is_null() && self.compare(&(*n).key, key) == std::cmp::Ordering::Less
         }
     }
@@ -329,45 +315,6 @@ mod tests {
         let mut rnd = Random::new(1000);
         let mut keys = HashSet::new();
         let skiplist = SkipList::new(cmp_func);
-
-        let new_key = 2000;
-        keys.insert(new_key);
-        skiplist.insert(new_key);
-        /*let mut no = Node::new_node(1, 2);
-        let ptr_no: *mut Node<i32> = &mut no as *mut Node<i32>;
-        /*keys.insert(1432);
-        skiplist.contains(&1432);*/
-        unsafe {
-            let kv = (*ptr_no).key;
-            println!("{}", kv);
-        }*/
-
-
-        let new_key = 1000;
-        let (x, prev) = skiplist.find_greater_or_equal(&new_key, true);
-        let mut null_count = 0;
-        for i in 0..12 {
-            let n = skiplist.head.no_barrier_next(i);
-            if n.is_null() {
-                null_count += 1
-            } else {
-                unsafe {
-                let vv = &(*n).key;
-                println!("{}", vv)};
-            }
-
-        }
-        let n = skiplist.head.next(1);
-        let n_null = n.is_null();
-        let v = unsafe {(*n).key};
-        let nr = unsafe{&(*n)};
-        let v1 = &nr.key;
-        println!("{}", v);
-        let n = skiplist.head.next(1);
-        let v = unsafe {&(*n).key};
-        println!("{}", v);
-
-
         for i in 0..N {
             let n = rnd.next();
             let key = n as i32 % R;
