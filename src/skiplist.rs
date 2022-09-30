@@ -287,7 +287,8 @@ impl<'a, K> Iter<'a, K> where K: Default {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::collections::{BTreeSet, HashSet};
+    use std::ops::Sub;
     use crate::random::Random;
     use super::*;
 
@@ -313,7 +314,7 @@ mod tests {
         const N:i32 = 2000;
         const R:i32 = 5000;
         let mut rnd = Random::new(1000);
-        let mut keys = HashSet::new();
+        let mut keys = BTreeSet::new();
         let skiplist = SkipList::new(cmp_func);
         for i in 0..N {
             let n = rnd.next();
@@ -332,6 +333,60 @@ mod tests {
             }
         }
 
+        // Simple iterator tests
+        {
+            let mut iter = Iter::new(&skiplist);
+            assert!(!iter.valid());
+
+            iter.seek(&0);
+            assert!(iter.valid());
+            //assert_eq!(*(keys.begin()), iter.key());
+
+            iter.seek_to_first();
+            assert!(iter.valid());
+            // ASSERT_EQ(*(keys.begin()), iter.key());
+
+            iter.seek_to_last();
+            assert!(iter.valid());
+            //ASSERT_EQ(*(keys.rbegin()), iter.key());
+        }
+
+        // Forward iteration test
+        for i in 0..R {
+            let mut iter = Iter::new(&skiplist);
+            iter.seek(&i);
+
+            // Compare against model iterator
+            let cmp_keys = keys.iter().filter(|&k| *k >= i).collect::<BTreeSet<&i32>>();
+            let mut model_iter = cmp_keys.iter();
+            for j in 0..3 {
+                match model_iter.next() {
+                    None => {
+                        assert!(!iter.valid());
+                        break;
+                    },
+                    Some(&key) => {
+                        assert!(iter.valid());
+                        assert_eq!(key, iter.key());
+                        iter.next();
+                    }
+                }
+            }
+        }
+
+        // Backward iteration test
+        /*{
+            let mut iter = Iter::new(&skiplist);
+            iter.seek_to_last();
+            // Compare against model iterator
+            let mut model_iter = keys.reverse().iter();
+            while model_iter.prev() {
+                assert!(iter.valid());
+                assert_eq!(*model_iter, iter.key());
+                iter.prev();
+            }
+            assert!(!iter.valid());
+        }*/
     }
 }
 
