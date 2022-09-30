@@ -30,6 +30,14 @@ impl<'a> Slice<'a> {
             size: d.len()
         }
     }
+    
+    pub fn size(&self) -> usize {
+        self.data.len()
+    }
+    
+    pub fn data(&self) -> &[u8]{
+        self.data
+    }
 }
 
 #[test]
