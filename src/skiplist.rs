@@ -118,7 +118,7 @@ impl<K> SkipList<K> where K: Default {
         let mut x = &self.head as *const Node<K>;
         let mut level = self.get_max_height() - 1;
         loop {
-            let next: *const Node<K> = unsafe {(*x).no_barrier_next(level)};
+            let next: *const Node<K> = unsafe {(*x).next(level)};
             if self.key_is_after_node(key, next) {
                 x = next;
             } else {
@@ -165,7 +165,7 @@ impl<K> SkipList<K> where K: Default {
             // todo!() assert x is head or compare(x.key, k) < 0
             unsafe {
                 let next =  (*x).next(level);
-                if next.is_null() || self.compare(&(*next).key, key) == std::cmp::Ordering::Less {
+                if next.is_null() || self.compare(&(*next).key, key) != std::cmp::Ordering::Less {
                     if level == 0 {
                         return Some(&*x);
                     } else {
@@ -375,18 +375,23 @@ mod tests {
         }
 
         // Backward iteration test
-        /*{
+        {
             let mut iter = Iter::new(&skiplist);
             iter.seek_to_last();
             // Compare against model iterator
-            let mut model_iter = keys.reverse().iter();
-            while model_iter.prev() {
+            let mut reversed = BTreeSet::new();
+            for v in &keys {
+                reversed.insert(std::cmp::Reverse(v));
+            }
+
+            let mut model_iter = reversed.iter();
+            while let Some(&std::cmp::Reverse(key)) = model_iter.next() {
                 assert!(iter.valid());
-                assert_eq!(*model_iter, iter.key());
+                assert_eq!(key, iter.key());
                 iter.prev();
             }
             assert!(!iter.valid());
-        }*/
+        }
     }
 }
 
