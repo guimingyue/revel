@@ -12,12 +12,21 @@
 
 //! memtable
 use std::cmp::Ordering;
+use std::cmp::Ordering::Less;
 use crate::coding::{decode_fixed64, encode_fixed64, encode_varint32, get_varint32, varint_length};
-use crate::dbformat::{compare, LookupKey, SequenceNumber, ValueType};
-use crate::Error;
+use crate::comparator::Comparator;
+use crate::dbformat::{compare, InternalKeyComparator, LookupKey, SequenceNumber, ValueType};
+use crate::{comparator, Error};
 use crate::Error::NotFound;
 use crate::skiplist::{Iter, SkipList};
 use crate::slice::Slice;
+
+#[inline]
+fn get_length_prefixed_slice(buf: &[u8], offset: usize) -> Slice {
+    // todo!("fix unwrap")
+    let (key_length, new_offset) = get_varint32(buf, 5, offset).unwrap();
+    Slice::from_bytes(&buf[new_offset..(new_offset + key_length as usize)])
+}
 
 type Table = SkipList<Vec<u8>>;
 
@@ -28,9 +37,14 @@ pub struct MemTable {
 
 impl MemTable {
     
-    pub fn new(comparator: fn(a: &Vec<u8>, b: &Vec<u8>) -> std::cmp::Ordering) -> Self {
+    pub fn new(comparator: &'static InternalKeyComparator) -> Self {
+        let key_comparator = |akey: &Vec<u8>, bkey: &Vec<u8>| -> Ordering {
+            let a = get_length_prefixed_slice(akey, 0);
+            let b = get_length_prefixed_slice(bkey, 0);
+            comparator.compare(&a, &b)
+        };
         MemTable {
-            table: Box::new(Table::new(comparator))
+            table: Box::new(Table::new(Box::new(key_comparator)))
         }
     }
 
@@ -53,7 +67,7 @@ impl MemTable {
             + internal_key_size 
             + varint_length(val_size as u64) 
             + val_size;
-        let mut buf = Vec::with_capacity(encoded_len);
+        let mut buf = vec![0; encoded_len];
         
         let mut offset = encode_varint32(&mut buf, internal_key_size as u32, 0);
         unsafe {
@@ -62,7 +76,7 @@ impl MemTable {
         offset += key_size;
         encode_fixed64(&mut buf, (seq << 8) | valueType as u64, offset);
         offset += 8;
-        encode_varint32(&mut buf, val_size as u32, offset);
+        offset += encode_varint32(&mut buf, val_size as u32, offset);
         unsafe {
             std::ptr::copy(value.data().as_ptr(), buf.as_mut_ptr().offset(offset as isize), val_size);
         }
@@ -98,7 +112,7 @@ impl MemTable {
                         let tag = decode_fixed64(buf, key_length as usize - 8);
                         return match ValueType::from((tag & 0xff) as u8) {
                             ValueType::KTypeValue => {
-                                let slice = Self::get_length_prefixed_slice(buf, key_length as usize);
+                                let slice = get_length_prefixed_slice(buf, key_length as usize);
                                 (true, Ok(slice.data().to_vec()))
                             },
                             ValueType::KTypeDeletion => {
@@ -112,12 +126,6 @@ impl MemTable {
             }
         }
         (false, Err(NotFound))
-    } 
-    
-    fn get_length_prefixed_slice(buf: &[u8], offset: usize) -> Slice {
-        // todo!("fix unwrap")
-        let (key_length, new_offset) = get_varint32(buf, 5, offset).unwrap();
-        Slice::from_bytes(&buf[new_offset..(new_offset + key_length as usize)])
     }
 }
 
@@ -128,7 +136,9 @@ mod tests {
     #[test]
     fn test() {
         let func = |a: &Vec<u8>, b: &Vec<u8>| a.cmp(b);
-        let mut mem = MemTable::new(func);
-        mem.add(1, ValueType::KTypeValue, &Slice::from_empty(), &Slice::from_empty())
+        /*let mut mem = MemTable::new(func);
+        mem.add(1, ValueType::KTypeValue, &Slice::from_str("key"), &Slice::from_str("value"));
+        let result = mem.get(&LookupKey::new(&Slice::from_str("key"), 0 as SequenceNumber));
+        assert!(result.0)*/
     }
 }

@@ -13,9 +13,6 @@
 use std::cell::RefCell;
 use std::iter::Iterator;
 use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
-use rand::prelude::ThreadRng;
-use rand::Rng;
-use rand::rngs::StdRng;
 use crate::random::Random;
 
 const MAX_HEIGHT: usize = 12;
@@ -36,7 +33,7 @@ pub struct SkipList<K> where K: Default {
     
     rand: RefCell<Random>,
     
-    comparator: fn(a: &K, b: &K) -> std::cmp::Ordering
+    comparator: Box<dyn Fn(&K, &K) -> std::cmp::Ordering>
     
 }
 
@@ -76,7 +73,7 @@ impl <K> Node<K> {
 
 impl<K> SkipList<K> where K: Default {
     
-    pub fn new(comparator: fn(a: &K, b: &K) -> std::cmp::Ordering) -> Self {
+    pub fn new(comparator: Box<dyn Fn(&K, &K) -> std::cmp::Ordering>) -> Self {
         SkipList {
             comparator,
             max_height: AtomicUsize::new(1),
@@ -292,11 +289,11 @@ mod tests {
     use crate::random::Random;
     use super::*;
 
-    const cmp_func: fn(&i32, &i32) -> std::cmp::Ordering = |a: &i32, b: &i32| a.cmp(b);
+    //const cmp_func: Box<dyn Fn(&i32, &i32) -> std::cmp::Ordering> = Box::new(|a: &i32, b: &i32| a.cmp(b));
 
     #[test]
     fn test_skiplist_empty() {
-        let list = SkipList::new(cmp_func);
+        let list = SkipList::new(Box::new(|a: &i32, b: &i32| a.cmp(b)));
         assert!(!list.contains(&10));
 
         let mut iter = Iter::new(&list);
@@ -304,7 +301,7 @@ mod tests {
         iter.seek_to_first();
         assert!(!iter.valid());
         iter.seek(&100);
-        assert!(&iter.valid());
+        assert!(!&iter.valid());
         iter.seek_to_last();
         assert!(!iter.valid());
     }
@@ -315,7 +312,7 @@ mod tests {
         const R:i32 = 5000;
         let mut rnd = Random::new(1000);
         let mut keys = BTreeSet::new();
-        let skiplist = SkipList::new(cmp_func);
+        let skiplist = SkipList::new(Box::new(|a: &i32, b: &i32| a.cmp(b)));
         for i in 0..N {
             let n = rnd.next();
             let key = n as i32 % R;

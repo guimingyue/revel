@@ -10,7 +10,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::coding::{encode_fixed64, encode_varint32};
+use std::cmp::Ordering;
+use crate::coding::{decode_fixed64, encode_fixed64, encode_varint32};
+use crate::comparator::Comparator;
 use crate::slice::Slice;
 
 pub type SequenceNumber = u64;
@@ -38,6 +40,42 @@ impl ValueType {
 
 static kValueTypeForSeek: ValueType = ValueType::KTypeValue;
 
+pub struct InternalKeyComparator {
+
+    user_comparator: Box<dyn Comparator>
+
+}
+
+impl InternalKeyComparator {
+
+    pub fn new(comparator: Box<dyn Comparator>) -> Self {
+        InternalKeyComparator {
+            user_comparator: comparator
+        }
+    }
+}
+
+impl Comparator for InternalKeyComparator {
+
+    fn compare(&self, akey: &Slice, bkey: &Slice) -> Ordering {
+        let mut r = self.user_comparator.compare(akey, bkey);
+        if r == Ordering::Equal {
+            let anum = decode_fixed64(akey.data(), akey.size() - 8);
+            let bnum = decode_fixed64(bkey.data(), bkey.size() - 8);
+            if anum > bnum {
+                r = Ordering::Less
+            } else {
+                r = Ordering::Greater
+            }
+        }
+        r
+    }
+
+    fn name(&self) -> &str {
+        "revel.InternalKeyComparator"
+    }
+}
+
 pub struct LookupKey {
     
     buf: Vec<u8>,
@@ -54,7 +92,7 @@ impl LookupKey {
     pub fn new(user_key: &Slice, s: SequenceNumber) -> Self {
         let usize = user_key.size();
         let needed = usize + 13;
-        let mut buf = Vec::with_capacity(needed);
+        let mut buf = vec![0; needed];
         let start = 0;
         let writed = encode_varint32(&mut buf, usize as u32 + 8, 0);
         let kstart = writed;
@@ -85,6 +123,8 @@ fn pack_sequence_and_type(seq: u64, t: ValueType) -> u64 {
     assert!(t <= kValueTypeForSeek);
     (seq << 8) | t as u64
 }
+
+
 
 /// Order by:
 /// 

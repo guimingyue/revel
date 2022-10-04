@@ -30,6 +30,10 @@ impl<'a> Slice<'a> {
             size: d.len()
         }
     }
+
+    pub fn from_str(str: &'a str) -> Self {
+        Self::from_bytes(str.as_bytes())
+    }
     
     pub fn size(&self) -> usize {
         self.data.len()
