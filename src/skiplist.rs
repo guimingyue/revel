@@ -110,6 +110,10 @@ impl<K> SkipList<K> where K: Default {
         }
     }
 
+    pub fn get_comparator(&self) -> &dyn Fn(&K, &K) -> std::cmp::Ordering {
+        self.comparator.as_ref()
+    }
+
     fn find_greater_or_equal(&self, key: &K, ret_prev: bool) -> (Option<&Node<K>>, Box<Vec<*const Node<K>>>) {
         let mut prev = vec![std::ptr::null(); MAX_HEIGHT];
         let mut x = &self.head as *const Node<K>;

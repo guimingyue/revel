@@ -132,13 +132,16 @@ impl MemTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test() {
-        let func = |a: &Vec<u8>, b: &Vec<u8>| a.cmp(b);
-        /*let mut mem = MemTable::new(func);
+        static user_comparator: fn(a: &Slice, b: &Slice) -> Ordering = |a: &Slice, b: &Slice| {
+            a.data().cmp(b.data())
+        };
+        static internalKeyComparator:InternalKeyComparator = InternalKeyComparator::new(user_comparator);
+        let mut mem = MemTable::new(&internalKeyComparator);
         mem.add(1, ValueType::KTypeValue, &Slice::from_str("key"), &Slice::from_str("value"));
         let result = mem.get(&LookupKey::new(&Slice::from_str("key"), 0 as SequenceNumber));
-        assert!(result.0)*/
+        assert!(result.0)
     }
 }

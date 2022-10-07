@@ -42,13 +42,13 @@ static kValueTypeForSeek: ValueType = ValueType::KTypeValue;
 
 pub struct InternalKeyComparator {
 
-    user_comparator: Box<dyn Comparator>
+    user_comparator: fn(a: &Slice, b: &Slice) -> Ordering
 
 }
 
 impl InternalKeyComparator {
 
-    pub fn new(comparator: Box<dyn Comparator>) -> Self {
+    pub const fn new(comparator: fn(a: &Slice, b: &Slice) -> Ordering) -> Self {
         InternalKeyComparator {
             user_comparator: comparator
         }
@@ -58,7 +58,7 @@ impl InternalKeyComparator {
 impl Comparator for InternalKeyComparator {
 
     fn compare(&self, akey: &Slice, bkey: &Slice) -> Ordering {
-        let mut r = self.user_comparator.compare(akey, bkey);
+        let mut r = (self.user_comparator)(akey, bkey);
         if r == Ordering::Equal {
             let anum = decode_fixed64(akey.data(), akey.size() - 8);
             let bnum = decode_fixed64(bkey.data(), bkey.size() - 8);
@@ -74,6 +74,10 @@ impl Comparator for InternalKeyComparator {
     fn name(&self) -> &str {
         "revel.InternalKeyComparator"
     }
+}
+
+unsafe impl Sync for InternalKeyComparator {
+
 }
 
 pub struct LookupKey {
@@ -126,13 +130,7 @@ fn pack_sequence_and_type(seq: u64, t: ValueType) -> u64 {
 
 
 
-/// Order by:
-/// 
-///    increasing user key (according to user-supplied comparator)
-/// 
-///    decreasing sequence number
-/// 
-///    decreasing type (though sequence# should be enough to disambiguate)
+
 pub fn compare(akey: &Slice, bkey: &Slice) -> std::cmp::Ordering {
     // todo!()
     std::cmp::Ordering::Equal
