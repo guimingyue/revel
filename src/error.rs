@@ -13,7 +13,7 @@
 use std::fmt::{Display, Formatter};
 use std::io;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Error {
     NotFound = 1,
     Corruption = 2,

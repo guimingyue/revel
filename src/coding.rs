@@ -108,7 +108,7 @@ fn get_varint32_fallback(buf: &[u8], offset: usize, limit: usize) -> Result<(u32
 }
 
 pub fn decode_fixed64(buf: &[u8], offset: usize) -> u64 {
-    let buffer = buf.as_ptr();
+    let buffer = buf[offset..].as_ptr();
     unsafe {
         (*buffer.offset(0) as u64) |
             (*buffer.offset(1) as u64) << 8 |
