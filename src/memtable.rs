@@ -24,15 +24,17 @@ use crate::slice::Slice;
 #[inline]
 fn get_length_prefixed_slice(buf: &[u8], offset: usize) -> Slice {
     // todo!("fix unwrap")
-    let (key_length, new_offset) = get_varint32(buf, 5, offset).unwrap();
-    Slice::from_bytes(&buf[new_offset..(new_offset + key_length as usize)])
+    let (key_length, new_offset) = get_varint32(buf, offset, offset + 5).unwrap();
+    Slice::from_bytes(&buf[offset + new_offset..(offset + new_offset + key_length as usize)])
 }
 
 type Table = SkipList<Vec<u8>>;
 
 pub struct MemTable {
     
-    table: Box<Table>
+    table: Box<Table>,
+
+    comparator: &'static InternalKeyComparator
 }
 
 impl MemTable {
@@ -44,7 +46,8 @@ impl MemTable {
             comparator.compare(&a, &b)
         };
         MemTable {
-            table: Box::new(Table::new(Box::new(key_comparator)))
+            table: Box::new(Table::new(Box::new(key_comparator))),
+            comparator
         }
     }
 
@@ -108,11 +111,11 @@ impl MemTable {
             let result = get_varint32(buf, 0, 5);
             return match result {
                 Ok((key_length, mut offset)) => {
-                    if compare(&Slice::from_bytes(&buf[0..(key_length-8) as usize]), &key.user_key()) == Ordering::Equal {
-                        let tag = decode_fixed64(buf, key_length as usize - 8);
+                    if (self.comparator.user_comparator())(&Slice::from_bytes(&buf[offset..=(key_length-8) as usize]), &key.user_key()) == Ordering::Equal {
+                        let tag = decode_fixed64(buf, offset + key_length as usize - 8);
                         return match ValueType::from((tag & 0xff) as u8) {
                             ValueType::KTypeValue => {
-                                let slice = get_length_prefixed_slice(buf, key_length as usize);
+                                let slice = get_length_prefixed_slice(buf, offset + key_length as usize);
                                 (true, Ok(slice.data().to_vec()))
                             },
                             ValueType::KTypeDeletion => {
@@ -140,8 +143,14 @@ mod tests {
         };
         static internalKeyComparator:InternalKeyComparator = InternalKeyComparator::new(user_comparator);
         let mut mem = MemTable::new(&internalKeyComparator);
-        mem.add(1, ValueType::KTypeValue, &Slice::from_str("key"), &Slice::from_str("value"));
-        let result = mem.get(&LookupKey::new(&Slice::from_str("key"), 0 as SequenceNumber));
-        assert!(result.0)
+        let (key, value) = ("key", "value");
+        mem.add(1, ValueType::KTypeValue, &Slice::from_str(key), &Slice::from_str(value));
+        let result = mem.get(&LookupKey::new(&Slice::from_str(key), 1 as SequenceNumber));
+        assert!(result.0);
+        assert_eq!(value, unsafe {String::from_utf8_unchecked(result.1.expect("unexpected result"))});
+        let result = mem.get(&LookupKey::new(&Slice::from_str("yek"), 1 as SequenceNumber));
+        assert!(!result.0);
+        let err = result.1.expect_err("unexpect");
+        assert_eq!(NotFound, err);
     }
 }

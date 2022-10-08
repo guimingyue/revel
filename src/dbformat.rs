@@ -31,8 +31,8 @@ impl ValueType {
     
     pub fn from(ordinal: u8) -> Self {
         match ordinal { 
-            ox0 => ValueType::KTypeDeletion,
-            0x1 => ValueType::KTypeValue,
+            0 => ValueType::KTypeDeletion,
+            1 => ValueType::KTypeValue,
             _ => panic!("Unknown ValueType ordinal")
         }
     }
@@ -52,6 +52,10 @@ impl InternalKeyComparator {
         InternalKeyComparator {
             user_comparator: comparator
         }
+    }
+
+    pub fn user_comparator(&self) -> fn(a: &Slice, b: &Slice) -> Ordering {
+        self.user_comparator
     }
 }
 
@@ -118,7 +122,7 @@ impl LookupKey {
     }
     
     pub fn user_key(&self) -> Slice {
-        Slice::from_bytes(&self.buf[self.kstart..self.end])
+        Slice::from_bytes(&self.buf[self.kstart..self.end-8])
     }
 }
 
