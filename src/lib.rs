@@ -18,6 +18,7 @@ pub mod db;
 pub mod error;
 pub mod slice;
 pub mod comparator;
+pub mod log_writer;
 
 mod memtable;
 mod log;
@@ -27,3 +28,4 @@ mod skiplist;
 mod dbformat;
 mod coding;
 mod random;
+mod env;
