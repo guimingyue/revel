@@ -29,3 +29,4 @@ mod dbformat;
 mod coding;
 mod random;
 mod env;
+mod util;
