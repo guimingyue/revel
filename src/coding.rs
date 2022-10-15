@@ -46,6 +46,19 @@ pub fn encode_varint32(buf: &mut [u8], v: u32, offset: usize) -> usize {
     }
 }
 
+pub fn encode_fixed32(buf: &mut [u8], value: u32, offset: usize) -> usize {
+    let buffer = buf[offset..].as_mut_ptr();
+
+    // Recent clang and gcc optimize this to a single mov / str instruction.
+    unsafe {
+        *buffer.offset(0) = value as u8;
+        *buffer.offset(1) = (value >> 8) as u8;
+        *buffer.offset(2) = (value >> 16) as u8;
+        *buffer.offset(3) = (value >> 24) as u8;
+    }
+    4
+}
+
 /// todo!() inline this function
 pub fn encode_fixed64(buf: &mut [u8], value: u64, offset: usize) -> usize {
     let buffer = buf[offset..].as_mut_ptr();
