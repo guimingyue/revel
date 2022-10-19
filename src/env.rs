@@ -13,6 +13,7 @@
 use std::cell::{RefCell, RefMut};
 use std::fs::{File, OpenOptions};
 use std::io::{Error, Read, Seek, SeekFrom, Write};
+use std::os::unix::fs::FileExt;
 use crate::Result;
 use crate::slice::Slice;
 
@@ -47,14 +48,14 @@ pub trait WritableFile {
 
 pub trait SequentialFile {
 
-    fn read(&self, n: usize) -> Result<Box<Slice>>;
+    fn read<'a>(&'a self, scratch: &'a mut [u8]) -> Result<Slice>;
 
     fn skip(&self, n: u64) -> Result<()>;
 }
 
 pub trait RandomAccessFile {
 
-    fn read(offset: u64, n: usize, result: &Slice, scratch: &[u8]) -> Result<()>;
+    fn read<'a>(&'a self, offset: u64, scratch: &'a mut [u8]) -> Result<Slice>;
 
 }
 
@@ -155,11 +156,11 @@ pub struct PosixSequentialFile {
 
 impl SequentialFile for PosixSequentialFile {
     
-    fn read(&self, n: usize) -> Result<Box<Slice>> {
-        // todo!() retry
-        let mut scratch = vec![0; n];
-        match self.file.borrow_mut().read(&mut scratch) {
-            Ok(_) => Ok(Box::new(Slice::from_bytes(&scratch))),
+    fn read<'a>(&'a self, scratch: &'a mut [u8]) -> Result<Slice> {
+        match self.file.borrow_mut().read( scratch) {
+            Ok(_) => {
+                Ok(Slice::from_bytes(scratch))
+            },
             Err(e) => Err(crate::Error::from(e))
         }
     }
@@ -167,5 +168,29 @@ impl SequentialFile for PosixSequentialFile {
     fn skip(&self, n: u64) -> Result<()> {
         self.file.borrow_mut().seek(SeekFrom::Start(n as u64))?;
         Ok(())
+    }
+}
+
+pub struct PosixRandomAccessFile {
+    has_permanent_file: bool,
+
+    file: RefCell<File>,
+
+    // todo!() Limiter
+
+    filename: String
+
+}
+
+impl RandomAccessFile for PosixRandomAccessFile {
+
+    fn read<'a>(&'a self, offset: u64, scratch: &'a mut [u8]) -> Result<Slice> {
+        if !self.has_permanent_file {
+            // todo!()
+        }
+
+        self.file.borrow().read_at(scratch, offset)?;
+
+        Ok(Slice::from_bytes(scratch))
     }
 }
