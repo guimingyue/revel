@@ -158,8 +158,8 @@ impl SequentialFile for PosixSequentialFile {
     
     fn read<'a>(&'a self, scratch: &'a mut [u8]) -> Result<Slice> {
         match self.file.borrow_mut().read( scratch) {
-            Ok(_) => {
-                Ok(Slice::from_bytes(scratch))
+            Ok(size) => {
+                Ok(Slice::from_bytes(&scratch[0..size]))
             },
             Err(e) => Err(crate::Error::from(e))
         }

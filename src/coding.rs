@@ -134,6 +134,13 @@ pub fn decode_fixed64(buf: &[u8], offset: usize) -> u64 {
     }
 }
 
+pub fn decode_fix32(buf: &[u8]) -> u32 {
+    return buf[0] as u32 |
+        ((buf[1] as u32) << 8) |
+        ((buf[2] as u32) << 16) |
+        ((buf[3] as u32) << 32);
+}
+
 pub fn put_varint32(dst: &mut Vec<u8>, v: u32) -> usize {
     let mut buf = vec![0;5];
     let size = encode_varint32(&mut buf, v, 0);

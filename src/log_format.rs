@@ -22,7 +22,7 @@ pub enum RecordType {
     kMiddleType = 3,
     kLastType = 4
 }
-pub const kMaxRecordType: usize = RecordType::kLastType as usize;
+pub const kMaxRecordType: u8 = RecordType::kLastType as u8;
 
 pub const kBlockSize: usize = 32768;
 

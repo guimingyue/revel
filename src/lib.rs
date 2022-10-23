@@ -10,6 +10,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+extern crate core;
+
 use crate::error::Error;
 
 pub type Result<T = (), E = Error> = std::result::Result<T, E>;
@@ -31,3 +33,4 @@ mod random;
 mod env;
 mod util;
 mod log_format;
+mod log_reader;
