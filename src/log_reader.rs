@@ -41,19 +41,19 @@ pub struct Reader {
 
     checksum: bool,
 
-    buffer: Vec<u8>,
+    buffer: RefCell<Vec<u8>>,
 
-    eof: bool,
+    eof: RefCell<bool>,
 
-    last_record_offset: u64,
+    last_record_offset: RefCell<u64>,
 
-    end_of_buffer_offset: u64,
+    end_of_buffer_offset: RefCell<u64>,
 
     initial_offset: u64,
 
     resyncing: bool,
 
-    skip_size: u64
+    skip_size: RefCell<u64>
 
 }
 
@@ -63,28 +63,26 @@ impl Reader {
         Reader {
             file,
             checksum,
-            buffer: vec![0; kBlockSize],
-            eof: false,
-            last_record_offset: 0,
-            end_of_buffer_offset: 0,
+            buffer: RefCell::new(vec![0; kBlockSize]),
+            eof: RefCell::new(false),
+            last_record_offset: RefCell::new(0),
+            end_of_buffer_offset: RefCell::new(0),
             initial_offset,
             resyncing: initial_offset > 0,
-            skip_size: 0
+            skip_size: RefCell::new(0)
         }
     }
 
-    pub fn read_record(&mut self, scratch: &mut Vec<u8>) -> crate::Result<Slice> {
+    pub fn read_record<'a, 'b>(&'a mut self, scratch: &'b mut Vec<u8>) -> crate::Result<Slice<'b>> {
         // todo!() skip to last record offset
         scratch.clear();
 
         let mut in_fragmented_record = false;
         let mut prospective_record_offset: u64 = 0;
-        let mut fragment = Slice::from_empty();
         loop {
-            let record_type = self.read_physical_record(&mut fragment);
-            let physical_record_offset = self.end_of_buffer_offset - self.skip_size - kHeaderSize as u64 - fragment.size() as u64;
+            let physical_record_offset = 0; //*self.end_of_buffer_offset.borrow() - *self.skip_size.borrow() - kHeaderSize as u64 - fragment.size() as u64;
 
-            if self.resyncing {
+            /*if self.resyncing {
                 if record_type == kMiddleType as u32 {
                     continue;
                 } else if record_type == kLastType as u32 {
@@ -92,110 +90,127 @@ impl Reader {
                 } else {
                     self.resyncing = false;
                 }
-            }
-            match record_type {
-                K_FULL_TYPE => {
-                    self.last_record_offset = physical_record_offset;
-                    scratch.clear();
-                    return Ok(fragment)
-                },
-                K_FIRST_TYPE => {
-                    in_fragmented_record = true;
-                    prospective_record_offset = physical_record_offset;
-                    scratch.extend_from_slice(fragment.data());
-                },
-                K_MIDDLE_TYPE => {
-                    if !in_fragmented_record {
-                        // todo!()
-                    } else {
-                        scratch.extend_from_slice(fragment.data());
+            }*/
+            let buf = self.buffer.borrow();
+            match self.read_physical_record() {
+                Ok((record_type, data_pos)) => {
+                    match record_type {
+                        K_FULL_TYPE => {
+                            self.last_record_offset.replace(physical_record_offset);
+                            scratch.clear();
+                            scratch.extend_from_slice(&buf[data_pos..]);
+                            return Ok(Slice::from_bytes(&scratch[..]));
+                        },
+                        K_FIRST_TYPE => {
+                            in_fragmented_record = true;
+                            prospective_record_offset = physical_record_offset;
+                            scratch.extend_from_slice(&buf[data_pos..]);
+                        },
+                        K_MIDDLE_TYPE => {
+                            if !in_fragmented_record {
+                                // todo!()
+                            } else {
+                                scratch.extend_from_slice(&buf[data_pos..]);
+                            }
+                        },
+                        K_LAST_TYPE => {
+                            if !in_fragmented_record {
+                                // todo!()
+                            } else {
+                                scratch.extend_from_slice(&buf[data_pos..]);
+                                self.last_record_offset.replace(prospective_record_offset);
+                                return Ok(Slice::from_bytes(scratch.as_slice()));
+                            }
+                        },
+                        _ => {
+                            break;
+                        }
                     }
                 },
-                K_LAST_TYPE => {
-                    if !in_fragmented_record {
-                        // todo!()
-                    } else {
-                        scratch.extend_from_slice(fragment.data());
-                        self.last_record_offset = prospective_record_offset;
-                        return Ok(Slice::from_bytes(scratch.as_slice()));
-                    }
-                },
-                kEof => {
-                    if in_fragmented_record {
-                        // This can be caused by the writer dying immediately after
-                        // writing a physical record but before completing the next; don't
-                        // treat it as a corruption, just ignore the entire logical record.
-                        scratch.clear();
-                    }
-                    return Ok(Slice::from_empty());
-                }
-                _ => {
-                    in_fragmented_record = false;
-                    scratch.clear();
+                Err(err_type) => {
+                    match err_type {
+                        kEof => {
+                            if in_fragmented_record {
+                                // This can be caused by the writer dying immediately after
+                                // writing a physical record but before completing the next; don't
+                                // treat it as a corruption, just ignore the entire logical record.
+                                scratch.clear();
+                            }
+                            return Ok(Slice::from_empty());
+                        }
+                        _ => {
+                            in_fragmented_record = false;
+                            scratch.clear();
 
-                    break;
+                            break;
+                        }
+                    }
                 }
             }
         }
         Err(IOError)
     }
 
-    fn read_physical_record(&mut self, fragment: &mut Slice) -> u32 {
-        self.buffer.clear();
-        self.skip_size = 0;
-        if self.eof {
-            return kEof;
+    fn read_physical_record(&self) -> Result<(u32, usize), u32> {
+        self.skip_size.replace(0);
+        if *self.eof.borrow() {
+            return Err(kEof);
         }
 
-        match self.file.read(&mut self.buffer) {
-            Ok(slice) => {
-                self.end_of_buffer_offset = self.end_of_buffer_offset + slice.size() as u64;
-                if slice.size() < kBlockSize {
-                    self.eof = true;
+        let mut buf_len = 0;
+        {
+            let mut buf = self.buffer.borrow_mut();
+            let res = self.file.read(buf.as_mut_slice());
+            match res {
+                Ok(slice) => {
+                    buf_len = slice.size();
+                },
+                Err(_) => {
+                    self.eof.replace(true);
+                    return Err(kEof);
                 }
-                // todo!() this slice is read from file
-                let slice = Slice::from_empty();
-                let header = slice.data();
-                let a = (header[4] & 0xff) as u32;
-                let b = (header[5] & 0xff) as u32;
-                let type_ = header[6] as i32;
-                let length = a | (b << 8);
-                if kHeaderSize + length as usize > slice.size() {
-                    // todo!() error
-                    return kEof;
-                }
-
-                if type_ == kZeroType as i32 && length == 0 {
-                    // todo!() Skip zero length record without reporting any dorps ...
-                    self.buffer.clear();
-                    return kBadRecord;
-                }
-
-                if self.checksum {
-                    let expected_crc = crc::unmask(decode_fix32(&header[0..4]));
-                    let actual_crc = crc::value(&header[4..]);
-                    if actual_crc != expected_crc {
-                        // todo!()
-                        return kBadRecord;
-                    }
-                }
-                let data = &header[(kHeaderSize + length as usize)..];
-                if (self.end_of_buffer_offset - data.len() as u64 - kHeaderSize as u64 - length as u64) < self.initial_offset {
-                    self.skip_size = slice.size() as u64;
-                    self.buffer.clear();
-                    return kBadRecord;
-                }
-
-                *fragment = Slice::from_bytes(data);
-                return type_ as u32;
-            },
-            Err(_) => {
-                self.buffer.clear();
-                self.eof = true;
-                return kEof;
             }
         }
 
+        let end_of_buffer_offset = self.end_of_buffer_offset.take();
+        {
+            let buf = self.buffer.borrow();
+            let size = buf.len();
+            if size < kBlockSize {
+                self.eof.replace(true);
+            }
+
+            let header = &buf[..buf_len];
+            let a = (header[4] & 0xff) as u32;
+            let b = (header[5] & 0xff) as u32;
+            let type_ = header[6] as i32;
+            let length = a | (b << 8);
+            if kHeaderSize + length as usize > size {
+                // todo!() error
+                return Err(kEof);
+            }
+
+            if type_ == kZeroType as i32 && length == 0 {
+                // todo!() Skip zero length record without reporting any dorps ...
+                return Err(kBadRecord);
+            }
+
+            if self.checksum {
+                let expected_crc = crc::unmask(decode_fix32(&header[0..4]));
+                let actual_crc = crc::value(&header[4..]);
+                if actual_crc != expected_crc {
+                    // todo!()
+                    return Err(kBadRecord);
+                }
+            }
+            let data = &header[(kHeaderSize + length as usize)..];
+            if (end_of_buffer_offset - data.len() as u64 - kHeaderSize as u64 - length as u64) < self.initial_offset {
+                self.skip_size.replace(size as u64);
+                return Err(kBadRecord);
+            }
+
+            return Ok((type_ as u32, kHeaderSize + length as usize));
+        }
     }
 
 
