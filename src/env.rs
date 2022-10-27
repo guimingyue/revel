@@ -14,6 +14,7 @@ use std::cell::{RefCell, RefMut};
 use std::fs::{File, OpenOptions};
 use std::io::{Error, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::FileExt;
+use crate::Error::IOError;
 use crate::Result;
 use crate::slice::Slice;
 
@@ -192,5 +193,42 @@ impl RandomAccessFile for PosixRandomAccessFile {
         self.file.borrow().read_at(scratch, offset)?;
 
         Ok(Slice::from_bytes(scratch))
+    }
+}
+
+pub struct StringWritableFile {
+    data: String
+}
+
+impl StringWritableFile {
+    pub fn new() -> Self {
+        StringWritableFile {
+            data: String::new()
+        }
+    }
+}
+
+impl WritableFile for StringWritableFile {
+    fn append(&mut self, data: &Slice) -> crate::Result<()> {
+        let string = match String::from_utf8(data.data().to_vec()) {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(IOError);
+            }
+        };
+        self.data.push_str(&string);
+        Ok(())
+    }
+
+    fn flush(&mut self) -> crate::Result<()> {
+        Ok(())
+    }
+
+    fn close(&self) -> crate::Result<()> {
+        Ok(())
+    }
+
+    fn sync(&self) -> crate::Result<()> {
+        Ok(())
     }
 }
