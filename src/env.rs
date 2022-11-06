@@ -196,27 +196,21 @@ impl RandomAccessFile for PosixRandomAccessFile {
     }
 }
 
-pub struct StringWritableFile {
-    data: String
+pub struct MemoryWritableFile {
+    memory: Vec<u8>
 }
 
-impl StringWritableFile {
-    pub fn new() -> Self {
-        StringWritableFile {
-            data: String::new()
+impl MemoryWritableFile {
+    pub fn new(memory: Vec<u8>) -> Self {
+        MemoryWritableFile {
+            memory
         }
     }
 }
 
-impl WritableFile for StringWritableFile {
+impl WritableFile for MemoryWritableFile {
     fn append(&mut self, data: &Slice) -> crate::Result<()> {
-        let string = match String::from_utf8(data.data().to_vec()) {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(IOError);
-            }
-        };
-        self.data.push_str(&string);
+        self.memory.write_all(data.data())?;
         Ok(())
     }
 
@@ -229,6 +223,41 @@ impl WritableFile for StringWritableFile {
     }
 
     fn sync(&self) -> crate::Result<()> {
+        Ok(())
+    }
+}
+
+pub struct MemorySequentialFile<'a> {
+    memory: &'a Vec<u8>,
+    offset: RefCell<usize>
+}
+
+impl <'a> MemorySequentialFile<'a> {
+
+    pub fn new(memory: &'a Vec<u8>) -> Self{
+        MemorySequentialFile{
+            memory,
+            offset: RefCell::new(0)
+        }
+    }
+}
+
+impl SequentialFile for MemorySequentialFile<'_> {
+    fn read<'b>(&'b self, mut scratch: &'b mut [u8]) -> Result<Slice<'b>> {
+        let len = scratch.len();
+        let memory_end;
+        {
+            let memory_offset = *self.offset.borrow();
+            memory_end = memory_offset + len;
+            scratch.write(&self.memory[memory_offset..memory_end])?;
+        }
+        self.offset.replace(memory_end);
+        Ok(Slice::from_bytes(&scratch[0..len]))
+    }
+
+    fn skip(&self, n: u64) -> Result<()> {
+        let memory_offset = *self.offset.borrow() + n as usize;
+        self.offset.replace(memory_offset);
         Ok(())
     }
 }

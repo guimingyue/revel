@@ -122,10 +122,13 @@ impl Writer {
 
 #[cfg(test)]
 mod tests {
+    use crate::env::MemoryWritableFile;
     use super::*;
 
     #[test]
     fn test() {
-
+        let writable_file = Box::new(MemoryWritableFile::new(Vec::new()));
+        let mut writer = Writer::new(writable_file);
+        writer.add_record(&Slice::from_str("hello world")).expect("write failed");
     }
 }
