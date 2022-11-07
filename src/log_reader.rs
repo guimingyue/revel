@@ -220,13 +220,14 @@ impl Reader {
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
     use crate::env::MemorySequentialFile;
     use super::*;
 
     #[test]
     fn test() {
-        let memory = vec![0; 10];
-        let file = MemorySequentialFile::new(&memory);
+        let memory = Rc::new(vec![0; 10]);
+        let file = MemorySequentialFile::new(memory);
         let sequential_file = Box::new(file);
         let reader = Reader::new(sequential_file, true, 0);
     }

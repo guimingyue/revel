@@ -14,6 +14,7 @@ use std::cell::{RefCell, RefMut};
 use std::fs::{File, OpenOptions};
 use std::io::{Error, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::FileExt;
+use std::rc::Rc;
 use crate::Error::IOError;
 use crate::Result;
 use crate::slice::Slice;
@@ -227,14 +228,14 @@ impl WritableFile for MemoryWritableFile {
     }
 }
 
-pub struct MemorySequentialFile<'a> {
-    memory: &'a Vec<u8>,
+pub struct MemorySequentialFile {
+    memory: Rc<Vec<u8>>,
     offset: RefCell<usize>
 }
 
-impl <'a> MemorySequentialFile<'a> {
+impl MemorySequentialFile {
 
-    pub fn new(memory: &'a Vec<u8>) -> Self{
+    pub fn new(memory: Rc<Vec<u8>>) -> Self{
         MemorySequentialFile{
             memory,
             offset: RefCell::new(0)
@@ -242,8 +243,8 @@ impl <'a> MemorySequentialFile<'a> {
     }
 }
 
-impl SequentialFile for MemorySequentialFile<'_> {
-    fn read<'b>(&'b self, mut scratch: &'b mut [u8]) -> Result<Slice<'b>> {
+impl SequentialFile for MemorySequentialFile {
+    fn read<'a>(&'a self, mut scratch: &'a mut [u8]) -> Result<Slice<'a>> {
         let len = scratch.len();
         let memory_end;
         {
