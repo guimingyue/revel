@@ -91,9 +91,10 @@ impl Reader {
                     self.resyncing = false;
                 }
             }*/
-            let buf = self.buffer.borrow();
+            //let buf = self.buffer.borrow();
             match self.read_physical_record() {
                 Ok((record_type, data_pos)) => {
+                    let buf = self.buffer.borrow();
                     match record_type {
                         K_FULL_TYPE => {
                             self.last_record_offset.replace(physical_record_offset);
@@ -226,9 +227,11 @@ mod tests {
 
     #[test]
     fn test() {
-        let memory = Rc::new(vec![0; 10]);
+        let memory = Rc::new(vec![11, 145, 17, 240, 11, 0, 1, 104 ,101 ,108 ,108 ,111 ,32 ,119 ,111 ,114 ,108 ,100]);
         let file = MemorySequentialFile::new(memory);
         let sequential_file = Box::new(file);
-        let reader = Reader::new(sequential_file, true, 0);
+        let mut reader = Reader::new(sequential_file, true, 0);
+        let mut buf = vec![];
+        let slice = reader.read_record(&mut buf).expect("");
     }
 }

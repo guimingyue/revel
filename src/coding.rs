@@ -138,7 +138,7 @@ pub fn decode_fix32(buf: &[u8]) -> u32 {
     return buf[0] as u32 |
         ((buf[1] as u32) << 8) |
         ((buf[2] as u32) << 16) |
-        ((buf[3] as u32) << 32);
+        ((buf[3] as u32) << 24);
 }
 
 pub fn put_varint32(dst: &mut Vec<u8>, v: u32) -> usize {
