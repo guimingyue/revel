@@ -11,6 +11,7 @@
 // limitations under the License.
 
 use std::cell::{RefCell, RefMut};
+use std::cmp::min;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::FileExt;
@@ -245,12 +246,13 @@ impl MemorySequentialFile {
 
 impl SequentialFile for MemorySequentialFile {
     fn read<'a>(&'a self, mut scratch: &'a mut [u8]) -> Result<Slice<'a>> {
-        let len = scratch.len();
+        let len;
         let memory_end;
         {
             let memory_offset = *self.offset.borrow();
-            memory_end = memory_offset + len;
-            scratch.write(&self.memory[memory_offset..memory_end])?;
+            memory_end = min(memory_offset + scratch.len(), self.memory.len());
+            len = memory_end - memory_offset;
+            scratch[..len].copy_from_slice(&self.memory[memory_offset..memory_end]);
         }
         self.offset.replace(memory_end);
         Ok(Slice::from_bytes(&scratch[0..len]))

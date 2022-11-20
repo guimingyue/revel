@@ -198,7 +198,7 @@ impl Reader {
 
             if self.checksum {
                 let expected_crc = crc::unmask(decode_fix32(&header[0..4]));
-                let actual_crc = crc::value(&header[4..]);
+                let actual_crc = crc::value(&header[6..]);
                 if actual_crc != expected_crc {
                     // todo!()
                     return Err(kBadRecord);
