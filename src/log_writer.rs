@@ -24,12 +24,12 @@ pub struct Writer {
 
     block_offset: usize,
 
-    type_crc: [u32; kMaxRecordType as usize + 1]
+    type_crc: [u8; kMaxRecordType as usize + 1]
 }
 
-pub fn init_type_crc(type_crc: &mut [u32]) {
+pub fn init_type_crc(type_crc: &mut [u8]) {
     for i in 0..=kMaxRecordType {
-        type_crc[i as usize] = crc::value(&[i as u8]);
+        type_crc[i as usize] = i as u8;
     }
 }
 
@@ -40,7 +40,7 @@ impl Writer {
     }
 
     pub fn new_with_block_offset(dest: Box<dyn WritableFile>, block_offset: usize) -> Self{
-        let mut type_crc = [0 as u32; kMaxRecordType as usize + 1];
+        let mut type_crc = [0 as u8; kMaxRecordType as usize + 1];
         init_type_crc(&mut type_crc);
         Writer {
             dest,

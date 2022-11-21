@@ -15,11 +15,13 @@ use crc::{Crc, CRC_32_ISCSI};
 pub const CASTAGNOLI: Crc<u32> = Crc::<u32>::new(&CRC_32_ISCSI);
 
 pub fn value(data: &[u8]) -> u32 {
-    extend(0xffffffff, data)
+    CASTAGNOLI.checksum(data)
 }
 
-pub fn extend(crc: u32, data: &[u8]) -> u32 {
-    let mut digest = CASTAGNOLI.digest_with_initial(crc);
+// todo!() define as macro instead
+pub fn extend(init: u8, data: &[u8]) -> u32 {
+    let mut digest = CASTAGNOLI.digest();
+    digest.update(&[init]);
     digest.update(data);
     digest.finalize()
 }
@@ -32,12 +34,12 @@ const kMaskDelta: u32 = 0xa282ead8;
 /// contains embedded CRCs.  Therefore we recommend that CRCs stored
 /// somewhere (e.g., in files) should be masked before being stored.
 pub const fn mask(crc: u32) -> u32 {
-    ((crc >> 15) | (crc << 17)) + kMaskDelta
+    (((crc >> 15) as u64 | (crc << 17) as u64) + kMaskDelta as u64) as u32
 }
 
 /// Return the crc whose masked representation is masked_crc.
 pub const fn unmask(masked_crc: u32) -> u32 {
-    let rot = masked_crc - kMaskDelta;
+    let rot = (masked_crc as i64 - kMaskDelta as i64) as u32;
     (rot >> 17) | (rot << 15)
 }
 
@@ -78,15 +80,30 @@ mod tests {
         assert_ne!(value("a".as_bytes()), value("foo".as_bytes()));
     }
 
+    #[test]
     fn test_crc_extend() {
-        assert_eq!(value("hello world".as_bytes()), extend(value("hello ".as_bytes()), "world".as_bytes()));
+        assert_eq!(value("hello world".as_bytes()), extend('h' as u8, "ello world".as_bytes()));
     }
 
+    #[test]
     fn test_crc_mask() {
         let crc = value("foo".as_bytes());
         assert_ne!(crc, mask(crc));
         assert_ne!(crc, mask(mask(crc)));
         assert_eq!(crc, unmask(mask(crc)));
         assert_eq!(crc, unmask(unmask(mask(mask(crc)))));
+    }
+
+    #[test]
+    fn test_hello_world() {
+        let bytes = "hello world".as_bytes();
+        let crc = extend(1, bytes);
+        let mut digest = CASTAGNOLI.digest();
+        digest.update(&[1]);
+        digest.update(bytes);
+        let crc1 = digest.finalize();
+        assert_eq!(crc, crc1);
+        assert_eq!(mask(crc), mask(crc1));
+        assert_eq!(unmask(mask(crc)), unmask(mask(crc1)));
     }
 }

@@ -99,7 +99,7 @@ impl Reader {
                         K_FULL_TYPE => {
                             self.last_record_offset.replace(physical_record_offset);
                             scratch.clear();
-                            scratch.extend_from_slice(&buf[data_pos..]);
+                            scratch.extend_from_slice(&buf[kHeaderSize..]);
                             return Ok(Slice::from_bytes(&scratch[..]));
                         },
                         K_FIRST_TYPE => {
@@ -174,6 +174,7 @@ impl Reader {
         }
 
         let end_of_buffer_offset = self.end_of_buffer_offset.take();
+        self.end_of_buffer_offset.replace(end_of_buffer_offset + buf_len as u64);
         {
             let buf = self.buffer.borrow();
             let size = buf.len();
@@ -204,13 +205,13 @@ impl Reader {
                     return Err(kBadRecord);
                 }
             }
-            let data = &header[(kHeaderSize + length as usize)..];
-            if (end_of_buffer_offset - data.len() as u64 - kHeaderSize as u64 - length as u64) < self.initial_offset {
+            let prefix_removed = &header[(kHeaderSize + length as usize)..];
+            if (end_of_buffer_offset + buf_len as u64 - prefix_removed.len() as u64 - kHeaderSize as u64 - length as u64) < self.initial_offset {
                 self.skip_size.replace(size as u64);
                 return Err(kBadRecord);
             }
 
-            return Ok((type_ as u32, kHeaderSize + length as usize));
+            return Ok((type_ as u32, length as usize));
         }
     }
 
@@ -227,11 +228,15 @@ mod tests {
 
     #[test]
     fn test() {
-        let memory = Rc::new(vec![11, 145, 17, 240, 11, 0, 1, 104 ,101 ,108 ,108 ,111 ,32 ,119 ,111 ,114 ,108 ,100]);
+        let memory = Rc::new(vec![129, 221, 1, 7, 11, 0, 1, 104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]);
         let file = MemorySequentialFile::new(memory);
         let sequential_file = Box::new(file);
         let mut reader = Reader::new(sequential_file, true, 0);
         let mut buf = vec![];
-        let slice = reader.read_record(&mut buf).expect("");
+        let slice = reader.read_record(&mut buf).expect("error");
+        unsafe {
+            let str = String::from_utf8_unchecked(slice.data().to_vec());
+            assert_eq!(str, "hello world");
+        }
     }
 }
