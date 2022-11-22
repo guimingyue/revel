@@ -93,32 +93,32 @@ impl Reader {
             }*/
             //let buf = self.buffer.borrow();
             match self.read_physical_record() {
-                Ok((record_type, data_pos)) => {
+                Ok((record_type, length)) => {
                     let buf = self.buffer.borrow();
                     match record_type {
                         K_FULL_TYPE => {
                             self.last_record_offset.replace(physical_record_offset);
                             scratch.clear();
-                            scratch.extend_from_slice(&buf[kHeaderSize..]);
+                            scratch.extend_from_slice(&buf[kHeaderSize..kHeaderSize+length]);
                             return Ok(Slice::from_bytes(&scratch[..]));
                         },
                         K_FIRST_TYPE => {
                             in_fragmented_record = true;
                             prospective_record_offset = physical_record_offset;
-                            scratch.extend_from_slice(&buf[data_pos..]);
+                            scratch.extend_from_slice(&buf[kHeaderSize..kHeaderSize+length]);
                         },
                         K_MIDDLE_TYPE => {
                             if !in_fragmented_record {
                                 // todo!()
                             } else {
-                                scratch.extend_from_slice(&buf[data_pos..]);
+                                scratch.extend_from_slice(&buf[kHeaderSize..kHeaderSize+length]);
                             }
                         },
                         K_LAST_TYPE => {
                             if !in_fragmented_record {
                                 // todo!()
                             } else {
-                                scratch.extend_from_slice(&buf[data_pos..]);
+                                scratch.extend_from_slice(&buf[kHeaderSize..kHeaderSize+length]);
                                 self.last_record_offset.replace(prospective_record_offset);
                                 return Ok(Slice::from_bytes(scratch.as_slice()));
                             }
