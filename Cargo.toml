@@ -15,7 +15,7 @@ name = "revel"
 path = "src/lib.rs"
 
 [dependencies]
-rand="0.8.5"
+crc="3.0.0"
 
 [profile.dev]
 opt-level = 0

@@ -10,27 +10,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate core;
+#[derive(Clone, Copy)]
+pub enum RecordType {
+    // Zero is reserved for preallocated files
+    kZeroType = 0,
 
-use crate::error::Error;
+    kFullType = 1,
 
-pub type Result<T = (), E = Error> = std::result::Result<T, E>;
+    // For fragments
+    kFirstType = 2,
+    kMiddleType = 3,
+    kLastType = 4
+}
+pub const kMaxRecordType: u8 = RecordType::kLastType as u8;
 
-pub mod db;
-pub mod error;
-pub mod slice;
-pub mod comparator;
-pub mod log_writer;
+pub const kBlockSize: usize = 32768;
 
-mod memtable;
-mod log;
-mod fs;
-mod filename;
-mod skiplist;
-mod dbformat;
-mod coding;
-mod random;
-mod env;
-mod util;
-mod log_format;
-mod log_reader;
+// Header is checksum (4 bytes), length (2 bytes), type (1 byte).
+pub const kHeaderSize: usize = 4 + 2 + 1;
