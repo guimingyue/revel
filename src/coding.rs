@@ -12,6 +12,7 @@
 
 use std::fs::File;
 use std::io::Write;
+use crate::slice::Slice;
 
 pub fn encode_varint32(buf: &mut [u8], v: u32, offset: usize) -> usize {
     const B: i32 = 128;
