@@ -19,6 +19,7 @@ pub type Result<T = (), E = Error> = std::result::Result<T, E>;
 pub mod db;
 pub mod error;
 pub mod slice;
+pub mod write_batch;
 pub mod comparator;
 pub mod log_writer;
 

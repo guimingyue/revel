@@ -147,6 +147,11 @@ pub fn put_varint32(dst: &mut Vec<u8>, v: u32) -> usize {
     dst.write(&buf[..size]).expect("put varint32 failed")
 }
 
+pub fn put_length_prefixed_slice(dst: &mut Vec<u8>, value: &Slice) {
+    put_varint32(dst, value.size() as u32);
+    dst.extend_from_slice(value.data());
+}
+
 #[cfg(test)]
 mod tests {
     use std::env::var;
