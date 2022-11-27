@@ -168,6 +168,10 @@ pub fn set_contents(b: &mut WriteBatch, contents: &Slice) {
     b.rep.extend_from_slice(contents.data());
 }
 
+pub fn byte_size(batch: &WriteBatch) -> usize {
+    batch.rep.len()
+}
+
 
 #[cfg(test)]
 mod tests {

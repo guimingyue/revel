@@ -10,30 +10,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate core;
+pub struct Options {
 
-use crate::error::Error;
+}
 
-pub type Result<T = (), E = Error> = std::result::Result<T, E>;
+pub struct ReadOptions {
 
-pub mod db;
-pub mod error;
-pub mod slice;
-pub mod write_batch;
-pub mod comparator;
-pub mod log_writer;
-pub mod options;
+}
 
-mod memtable;
-mod log;
-mod fs;
-mod filename;
-mod skiplist;
-mod dbformat;
-mod coding;
-mod random;
-mod env;
-mod util;
-mod log_format;
-mod log_reader;
-mod version_set;
+pub struct WriteOptions {
+
+    pub sync: bool
+
+}
