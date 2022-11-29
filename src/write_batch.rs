@@ -59,7 +59,17 @@ impl WriteBatch {
     }
 
     pub fn append(&mut self, source: &Self) {
-        append(self, source)
+        set_count(self, count(self) + count(source));
+        let length = source.rep.len() - K_HEADER;
+        self.rep.extend_from_slice(&source.rep[K_HEADER..K_HEADER + length]);
+    }
+
+    pub fn set_sequence(&mut self, seq: SequenceNumber) {
+        encode_fixed64(&mut self.rep, seq, 0);
+    }
+
+    pub fn count(&self) -> u32 {
+        count(self)
     }
 
     pub fn iterate(&self, handler: &mut dyn Handler) {
@@ -145,10 +155,6 @@ pub fn set_count(b: &mut WriteBatch, n: u32) {
 
 pub fn sequence(b: &WriteBatch) -> SequenceNumber {
     decode_fixed64(&b.rep[8..], 0)
-}
-
-pub fn set_sequence(b: &mut WriteBatch, seq: SequenceNumber) {
-    encode_fixed64(&mut b.rep, seq, 0);
 }
 
 pub fn append(dst: &mut WriteBatch, src: &WriteBatch) {

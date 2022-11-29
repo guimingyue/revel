@@ -10,24 +10,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::fs::{File, OpenOptions};
 use std::path::Path;
-use std::sync::{Condvar, Mutex, MutexGuard};
+use std::rc::Rc;
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use crate::options::{Options, ReadOptions, WriteOptions};
-use crate::Result;
+use crate::{log_writer, Result};
+use crate::env::{PosixWritableFile, WritableFile};
 use crate::slice::Slice;
 use crate::version_set::VersionSet;
 use crate::write_batch::{append, byte_size, WriteBatch};
 
 pub struct DB {
-    file: File,
+    logfile: Rc<dyn WritableFile>,
     // Queue of writers
     writers: Mutex<VecDeque<Writer>>,
 
     versions: VersionSet,
 
-    temp_result: WriteBatch
+    temp_result: RefCell<WriteBatch>,
+
+    log: log_writer::Writer
 }
 
 impl DB {
@@ -42,11 +47,13 @@ impl DB {
             .write(true)
             .create(create)
             .open(path)? ;
+        let logfile = Rc::new(PosixWritableFile::new(str, file));
         let db = DB {
-            file,
+            logfile: logfile.clone(),
             writers: Mutex::new(VecDeque::new()),
             versions: VersionSet::new(str),
-            temp_result: WriteBatch::new()
+            temp_result: RefCell::new(WriteBatch::new()),
+            log: log_writer::Writer::new(logfile.clone())
         };
         Ok(db)
     }
@@ -68,14 +75,20 @@ impl DB {
     }
 
     pub fn write(&mut self, opt: &WriteOptions, updates: WriteBatch) -> bool {
-        let mut writers = self.writers.lock().unwrap();
-        writers.push_back(Writer::new(updates, opt.sync));
-        let last_sequence = self.versions.last_sequence();
-        self.build_batch_group(writers);
+        let mut last_sequence;
+        {
+            let mut writers = self.writers.lock().unwrap();
+            writers.push_back(Writer::new(updates, opt.sync));
+            last_sequence = self.versions.last_sequence();
+            self.build_batch_group(writers);
+            let mut write_batch = self.temp_result.borrow_mut();
+            write_batch.set_sequence(last_sequence + 1);
+            last_sequence += write_batch.count() as u64;
+        }
         true
     }
 
-    fn build_batch_group(&mut self, writers: MutexGuard<VecDeque<Writer>>) {
+    fn build_batch_group(&self, writers: MutexGuard<VecDeque<Writer>>) {
         let front = writers.front();
         let first = front.expect("writers should not be empty");
         let mut size = byte_size(&first.batch);
@@ -88,7 +101,7 @@ impl DB {
             max_size = size + (128 << 10);
         }
 
-        let mut result = &mut self.temp_result;
+        let mut result = self.temp_result.borrow_mut();
 
         let mut iter = writers.iter();
         iter.next();
@@ -103,7 +116,7 @@ impl DB {
                 // Do not make batch too big
                 break;
             }
-            append(result, &w.batch);
+            result.append(&w.batch);
         }
     }
 }

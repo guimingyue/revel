@@ -12,6 +12,8 @@
 
 use std::fs::File;
 use std::io::Write;
+use std::rc::Rc;
+use std::sync::Arc;
 use crate::coding::encode_fixed32;
 use crate::env::WritableFile;
 use crate::log_format::{kBlockSize, kHeaderSize, kMaxRecordType, RecordType};
@@ -20,7 +22,7 @@ use crate::Result;
 use crate::util::crc;
 
 pub struct Writer {
-    dest: Box<dyn WritableFile>,
+    dest: Rc<dyn WritableFile>,
 
     block_offset: usize,
 
@@ -35,11 +37,11 @@ pub fn init_type_crc(type_crc: &mut [u8]) {
 
 impl Writer {
 
-    pub fn new(dest: Box<dyn WritableFile>) -> Self {
+    pub fn new(dest: Rc<dyn WritableFile>) -> Self {
         Self::new_with_block_offset(dest, 0)
     }
 
-    pub fn new_with_block_offset(dest: Box<dyn WritableFile>, block_offset: usize) -> Self{
+    pub fn new_with_block_offset(dest: Rc<dyn WritableFile>, block_offset: usize) -> Self{
         let mut type_crc = [0 as u8; kMaxRecordType as usize + 1];
         init_type_crc(&mut type_crc);
         Writer {
@@ -127,7 +129,7 @@ mod tests {
 
     #[test]
     fn test() {
-        let writable_file = Box::new(MemoryWritableFile::new(Vec::new()));
+        let writable_file = Rc::new(MemoryWritableFile::new(Vec::new()));
         let mut writer = Writer::new(writable_file);
         writer.add_record(&Slice::from_str("hello world")).expect("write failed");
     }
