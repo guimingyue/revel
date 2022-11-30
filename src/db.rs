@@ -24,7 +24,7 @@ use crate::version_set::VersionSet;
 use crate::write_batch::{append, byte_size, WriteBatch};
 
 pub struct DB {
-    logfile: Rc<dyn WritableFile>,
+    logfile: Rc<RefCell<dyn WritableFile>>,
     // Queue of writers
     writers: Mutex<VecDeque<Writer>>,
 
@@ -47,7 +47,7 @@ impl DB {
             .write(true)
             .create(create)
             .open(path)? ;
-        let logfile = Rc::new(PosixWritableFile::new(str, file));
+        let logfile = Rc::new(RefCell::new(PosixWritableFile::new(str, file)));
         let db = DB {
             logfile: logfile.clone(),
             writers: Mutex::new(VecDeque::new()),
