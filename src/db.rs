@@ -19,9 +19,10 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use crate::options::{Options, ReadOptions, WriteOptions};
 use crate::{log_writer, Result};
 use crate::env::{PosixWritableFile, WritableFile};
+use crate::memtable::MemTable;
 use crate::slice::Slice;
 use crate::version_set::VersionSet;
-use crate::write_batch::{append, byte_size, WriteBatch};
+use crate::write_batch::{append, byte_size, insert_into, WriteBatch};
 
 pub struct DB {
     logfile: Rc<RefCell<dyn WritableFile>>,
@@ -85,6 +86,12 @@ impl DB {
             write_batch.set_sequence(last_sequence + 1);
             last_sequence += write_batch.count() as u64;
         }
+        let write_batch = self.temp_result.borrow();
+        let result = self.log.add_record(&write_batch.contents());
+        if opt.sync {
+            self.logfile.borrow().sync();
+        }
+        // insert_into(&write_batch, &mut self.mem);
         true
     }
 

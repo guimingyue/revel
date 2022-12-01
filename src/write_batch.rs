@@ -72,6 +72,10 @@ impl WriteBatch {
         count(self)
     }
 
+    pub fn contents(&self) -> Slice {
+        Slice::from_bytes(self.rep.as_slice())
+    }
+
     pub fn iterate(&self, handler: &mut dyn Handler) {
         let mut input = Slice::from_bytes(&self.rep);
         input.remove_prefix(K_HEADER);
