@@ -13,12 +13,13 @@
 //! memtable
 use std::cmp::Ordering;
 use std::cmp::Ordering::Less;
+use std::rc::Rc;
 use crate::coding::{decode_fixed64, encode_fixed64, encode_varint32, get_varint32, varint_length};
 use crate::comparator::Comparator;
 use crate::dbformat::{compare, InternalKeyComparator, LookupKey, SequenceNumber, ValueType};
 use crate::{comparator, Error};
 use crate::Error::NotFound;
-use crate::skiplist::{Iter, SkipList};
+use crate::skiplist::{Cmp, Iter, SkipList};
 use crate::slice::Slice;
 
 #[inline]
@@ -30,24 +31,41 @@ fn get_length_prefixed_slice(buf: &[u8], offset: usize) -> Slice {
 
 type Table = SkipList<Vec<u8>>;
 
+struct KeyComparator {
+    comparator: Rc<InternalKeyComparator>
+}
+
+impl KeyComparator {
+    pub fn new(comparator: Rc<InternalKeyComparator>) -> Self {
+        KeyComparator {
+            comparator
+        }
+    }
+}
+
+impl Cmp<Vec<u8>> for KeyComparator {
+    fn compare(&self, akey: &Vec<u8>, bkey: &Vec<u8>) -> Ordering {
+        let a = get_length_prefixed_slice(akey, 0);
+        let b = get_length_prefixed_slice(bkey, 0);
+        self.comparator.compare(&a, &b)
+    }
+}
+
 pub struct MemTable {
     
     table: Box<Table>,
 
-    comparator: &'static InternalKeyComparator
+    comparator: Rc<InternalKeyComparator>
 }
 
 impl MemTable {
     
-    pub fn new(comparator: &'static InternalKeyComparator) -> Self {
-        let key_comparator = |akey: &Vec<u8>, bkey: &Vec<u8>| -> Ordering {
-            let a = get_length_prefixed_slice(akey, 0);
-            let b = get_length_prefixed_slice(bkey, 0);
-            comparator.compare(&a, &b)
-        };
+    pub fn new(comparator: InternalKeyComparator) -> Self {
+        let cmp = Rc::new(comparator);
+        let key_comparator = KeyComparator::new(cmp.clone());
         MemTable {
             table: Box::new(Table::new(Box::new(key_comparator))),
-            comparator
+            comparator: cmp.clone()
         }
     }
 
@@ -141,8 +159,8 @@ mod tests {
         static user_comparator: fn(a: &Slice, b: &Slice) -> Ordering = |a: &Slice, b: &Slice| {
             a.data().cmp(b.data())
         };
-        static internalKeyComparator:InternalKeyComparator = InternalKeyComparator::new(user_comparator);
-        let mut mem = MemTable::new(&internalKeyComparator);
+        let internalKeyComparator = InternalKeyComparator::new(user_comparator);
+        let mut mem = MemTable::new(internalKeyComparator);
         let (key, value) = ("key", "value");
         mem.add(1, ValueType::KTypeValue, &Slice::from_str(key), &Slice::from_str(value));
         let result = mem.get(&LookupKey::new(&Slice::from_str(key), 1 as SequenceNumber));
