@@ -10,8 +10,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
+use crate::slice::Slice;
+
 pub struct Options {
 
+    pub comparator: fn(a: &Slice, b: &Slice) -> Ordering
 }
 
 pub struct ReadOptions {

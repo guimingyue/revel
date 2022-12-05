@@ -18,6 +18,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use crate::options::{Options, ReadOptions, WriteOptions};
 use crate::{log_writer, Result};
+use crate::dbformat::InternalKeyComparator;
 use crate::env::{PosixWritableFile, WritableFile};
 use crate::memtable::MemTable;
 use crate::slice::Slice;
@@ -33,7 +34,9 @@ pub struct DB {
 
     temp_result: RefCell<WriteBatch>,
 
-    log: log_writer::Writer
+    log: log_writer::Writer,
+
+    mem: MemTable
 }
 
 impl DB {
@@ -49,12 +52,14 @@ impl DB {
             .create(create)
             .open(path)? ;
         let logfile = Rc::new(RefCell::new(PosixWritableFile::new(str, file)));
+        let internalKeyComparator = InternalKeyComparator::new(options.comparator);
         let db = DB {
             logfile: logfile.clone(),
             writers: Mutex::new(VecDeque::new()),
             versions: VersionSet::new(str),
             temp_result: RefCell::new(WriteBatch::new()),
-            log: log_writer::Writer::new(logfile.clone())
+            log: log_writer::Writer::new(logfile.clone()),
+            mem: MemTable::new(internalKeyComparator)
         };
         Ok(db)
     }
@@ -91,7 +96,7 @@ impl DB {
         if opt.sync {
             self.logfile.borrow().sync();
         }
-        // insert_into(&write_batch, &mut self.mem);
+        insert_into(&write_batch, &mut self.mem);
         true
     }
 
