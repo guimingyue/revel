@@ -32,7 +32,7 @@ pub struct DB {
 
     versions: VersionSet,
 
-    temp_result: RefCell<WriteBatch>,
+    temp_batch: RefCell<WriteBatch>,
 
     log: log_writer::Writer,
 
@@ -57,7 +57,7 @@ impl DB {
             logfile: logfile.clone(),
             writers: Mutex::new(VecDeque::new()),
             versions: VersionSet::new(str),
-            temp_result: RefCell::new(WriteBatch::new()),
+            temp_batch: RefCell::new(WriteBatch::new()),
             log: log_writer::Writer::new(logfile.clone()),
             mem: MemTable::new(internalKeyComparator)
         };
@@ -87,16 +87,21 @@ impl DB {
             writers.push_back(Writer::new(updates, opt.sync));
             last_sequence = self.versions.last_sequence();
             self.build_batch_group(writers);
-            let mut write_batch = self.temp_result.borrow_mut();
+            let mut write_batch = self.temp_batch.borrow_mut();
             write_batch.set_sequence(last_sequence + 1);
             last_sequence += write_batch.count() as u64;
         }
-        let write_batch = self.temp_result.borrow();
+        let write_batch = self.temp_batch.borrow();
         let result = self.log.add_record(&write_batch.contents());
         if opt.sync {
             self.logfile.borrow().sync();
         }
         insert_into(&write_batch, &mut self.mem);
+        {
+            // clean up
+            self.temp_batch.borrow_mut().clear();
+            self.versions.set_last_sequence(last_sequence);
+        }
         true
     }
 
@@ -113,7 +118,7 @@ impl DB {
             max_size = size + (128 << 10);
         }
 
-        let mut result = self.temp_result.borrow_mut();
+        let mut result = self.temp_batch.borrow_mut();
 
         let mut iter = writers.iter();
         iter.next();
