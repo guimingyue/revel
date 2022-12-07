@@ -18,10 +18,12 @@ use std::rc::Rc;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use crate::options::{Options, ReadOptions, WriteOptions};
 use crate::{log_writer, Result};
-use crate::dbformat::InternalKeyComparator;
+use crate::dbformat::{InternalKeyComparator, LookupKey};
 use crate::env::{PosixWritableFile, WritableFile};
+use crate::error::Error::NotFound;
 use crate::memtable::MemTable;
 use crate::slice::Slice;
+use crate::util::crc::value;
 use crate::version_set::VersionSet;
 use crate::write_batch::{append, byte_size, insert_into, WriteBatch};
 
@@ -64,23 +66,33 @@ impl DB {
         Ok(db)
     }
 
-    pub fn put(&mut self, opt: &WriteOptions, key: &Slice, value: &Slice) -> bool {
+    pub fn put(&mut self, opt: &WriteOptions, key: &Slice, value: &Slice) -> Result<()> {
         let mut write_batch = WriteBatch::new();
         write_batch.put(key, value);
         self.write(opt, write_batch)
     }
 
-    pub fn delete(&mut self, opt: &WriteOptions, key: &Slice) -> bool {
+    pub fn delete(&mut self, opt: &WriteOptions, key: &Slice) -> Result<()> {
         let mut write_batch = WriteBatch::new();
         write_batch.delete(key);
         self.write(opt, write_batch)
     }
     
-    pub fn get(&self, options: &ReadOptions, key: &Slice) -> bool {
-        true
+    pub fn get(&self, options: &ReadOptions, key: &Slice) -> Result<Vec<u8>> {
+        let snapshot;
+        {
+            let lock = self.writers.lock();
+            snapshot = self.versions.last_sequence();
+            drop(lock);
+        }
+        let lkey = LookupKey::new(key, snapshot);
+        match self.mem.get(&lkey) {
+            (true, Ok(value)) => Ok(value),
+            _ => Err(NotFound)
+        }
     }
 
-    pub fn write(&mut self, opt: &WriteOptions, updates: WriteBatch) -> bool {
+    pub fn write(&mut self, opt: &WriteOptions, updates: WriteBatch) -> Result<()> {
         let mut last_sequence;
         {
             let mut writers = self.writers.lock().unwrap();
@@ -92,9 +104,9 @@ impl DB {
             last_sequence += write_batch.count() as u64;
         }
         let write_batch = self.temp_batch.borrow();
-        let result = self.log.add_record(&write_batch.contents());
+        self.log.add_record(&write_batch.contents())?;
         if opt.sync {
-            self.logfile.borrow().sync();
+            self.logfile.borrow().sync()?;
         }
         insert_into(&write_batch, &mut self.mem);
         {
@@ -102,7 +114,7 @@ impl DB {
             self.temp_batch.borrow_mut().clear();
             self.versions.set_last_sequence(last_sequence);
         }
-        true
+        Ok(())
     }
 
     fn build_batch_group(&self, writers: MutexGuard<VecDeque<Writer>>) {
