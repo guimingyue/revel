@@ -27,3 +27,17 @@ pub struct WriteOptions {
     pub sync: bool
 
 }
+
+impl Default for ReadOptions {
+    fn default() -> Self {
+        ReadOptions{}
+    }
+}
+
+impl Default for WriteOptions {
+    fn default() -> Self {
+        WriteOptions {
+            sync: true
+        }
+    }
+}

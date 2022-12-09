@@ -80,22 +80,28 @@ impl WriteBatch {
         let mut input = Slice::from_bytes(&self.rep);
         input.remove_prefix(K_HEADER);
         let mut found = 0;
-        while input.empty() {
+        while !input.empty() {
             found += 1;
             let data = input.data();
             let tag = data[0];
             let mut offset = 1;
             match ValueType::from(tag) {
                 ValueType::KTypeValue => {
+                    let mut len = 0;
                     match get_length_prefixed_slice(&data[offset..]) {
-                        Ok(key) => {
-                            offset += key.size();
-                            match get_length_prefixed_slice(&data[offset..]) {
-                                Ok(value) => handler.put(&key, &value),
+                        Ok((key, skip_len)) => {
+                            len += skip_len + key.size();
+                            match get_length_prefixed_slice(&data[offset + len..]) {
+                                Ok((value, skip_len)) => {
+                                    handler.put(&key, &value);
+                                    len += skip_len + value.size();
+                                },
                                 Err(_) => {
 
                                 }
                             }
+                            input.remove_prefix(len + 1);
+                            offset += len;
                         },
                         Err(_) => {
                             //
@@ -104,7 +110,9 @@ impl WriteBatch {
                 },
                 ValueType::KTypeDeletion => {
                     match get_length_prefixed_slice(input.data()) {
-                        Ok(key) => handler.delete(&key),
+                        Ok((key, skip_len)) => {
+                            handler.delete(&key)
+                        },
                         Err(_) => {
 
                         }

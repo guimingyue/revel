@@ -154,9 +154,11 @@ pub fn put_length_prefixed_slice(dst: &mut Vec<u8>, value: &Slice) {
     dst.extend_from_slice(value.data());
 }
 
-pub fn get_length_prefixed_slice(input: &[u8]) -> crate::Result<Slice> {
+/// get a slice from input, return the slice result and the skip len
+/// before the start of the returned slice
+pub fn get_length_prefixed_slice(input: &[u8]) -> crate::Result<(Slice, usize)> {
     match get_varint32(input, 0, input.len()) {
-        Ok((len, _)) => Ok(Slice::from_bytes(&input[1..len as usize])),
+        Ok((len, idx)) => Ok((Slice::from_bytes(&input[idx..idx+len as usize]), idx)),
         Err(_) => Err(Error::Corruption)
     }
 }

@@ -103,12 +103,14 @@ impl DB {
             write_batch.set_sequence(last_sequence + 1);
             last_sequence += write_batch.count() as u64;
         }
-        let write_batch = self.temp_batch.borrow();
-        self.log.add_record(&write_batch.contents())?;
-        if opt.sync {
-            self.logfile.borrow().sync()?;
+        {
+            let write_batch = self.temp_batch.borrow();
+            self.log.add_record(&write_batch.contents())?;
+            if opt.sync {
+                self.logfile.borrow().sync()?;
+            }
+            insert_into(&write_batch, &mut self.mem);
         }
-        insert_into(&write_batch, &mut self.mem);
         {
             // clean up
             self.temp_batch.borrow_mut().clear();
@@ -133,7 +135,6 @@ impl DB {
         let mut result = self.temp_batch.borrow_mut();
 
         let mut iter = writers.iter();
-        iter.next();
         while let Some(w) = iter.next() {
             if !first.sync && w.sync {
                 // Do not include a sync write into a batch handled by a non-sync write.
@@ -173,5 +174,25 @@ impl Writer {
 
     fn wait(&self) {
         //self.cv.wait()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cmp::Ordering;
+    use super::*;
+
+    #[test]
+    fn test() {
+        let user_comparator: fn(a: &Slice, b: &Slice) -> Ordering = |a: &Slice, b: &Slice| {
+            a.data().cmp(b.data())
+        };
+        let options = Options {
+            comparator: user_comparator
+        };
+        let mut db = DB::open(&options, "./text").expect("error");
+        db.put(&WriteOptions::default(), &Slice::from_str("key"), &Slice::from_str("value")).expect("put error");
+        let value = db.get(&ReadOptions::default(), &Slice::from_str("key")).expect("read error");
+        assert_eq!("value", String::from_utf8(value).unwrap());
     }
 }
