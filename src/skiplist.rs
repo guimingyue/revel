@@ -17,6 +17,12 @@ use crate::random::Random;
 
 const MAX_HEIGHT: usize = 12;
 
+pub trait Cmp<K> {
+
+    fn compare(&self, a: &K, b: &K) -> std::cmp::Ordering;
+
+}
+
 struct Node<K> {
     
     key: K,
@@ -33,7 +39,7 @@ pub struct SkipList<K> where K: Default {
     
     rand: RefCell<Random>,
     
-    comparator: Box<dyn Fn(&K, &K) -> std::cmp::Ordering>
+    comparator: Box<dyn Cmp<K>>
     
 }
 
@@ -73,7 +79,7 @@ impl <K> Node<K> {
 
 impl<K> SkipList<K> where K: Default {
     
-    pub fn new(comparator: Box<dyn Fn(&K, &K) -> std::cmp::Ordering>) -> Self {
+    pub fn new(comparator: Box<dyn Cmp<K>>) -> Self {
         SkipList {
             comparator,
             max_height: AtomicUsize::new(1),
@@ -108,10 +114,6 @@ impl<K> SkipList<K> where K: Default {
             None => false,
             Some(node) => self.equal(key, &node.key)
         }
-    }
-
-    pub fn get_comparator(&self) -> &dyn Fn(&K, &K) -> std::cmp::Ordering {
-        self.comparator.as_ref()
     }
 
     fn find_greater_or_equal(&self, key: &K, ret_prev: bool) -> (Option<&Node<K>>, Box<Vec<*const Node<K>>>) {
@@ -199,7 +201,7 @@ impl<K> SkipList<K> where K: Default {
     }
     
     fn compare(&self, a: &K, b: &K) -> std::cmp::Ordering {
-        (self.comparator)(a, b)
+        self.comparator.compare(a, b)
     }
     
     fn equal(&self, a: &K, b: &K) -> bool {
@@ -293,11 +295,17 @@ mod tests {
     use crate::random::Random;
     use super::*;
 
-    //const cmp_func: Box<dyn Fn(&i32, &i32) -> std::cmp::Ordering> = Box::new(|a: &i32, b: &i32| a.cmp(b));
+    struct KeyCmp;
+
+    impl Cmp<i32> for KeyCmp {
+        fn compare(&self, a: &i32, b: &i32) -> std::cmp::Ordering {
+            a.cmp(b)
+        }
+    }
 
     #[test]
     fn test_skiplist_empty() {
-        let list = SkipList::new(Box::new(|a: &i32, b: &i32| a.cmp(b)));
+        let list = SkipList::new(Box::new(KeyCmp{}));
         assert!(!list.contains(&10));
 
         let mut iter = Iter::new(&list);
@@ -316,7 +324,7 @@ mod tests {
         const R:i32 = 5000;
         let mut rnd = Random::new(1000);
         let mut keys = BTreeSet::new();
-        let skiplist = SkipList::new(Box::new(|a: &i32, b: &i32| a.cmp(b)));
+        let skiplist = SkipList::new(Box::new(KeyCmp{}));
         for i in 0..N {
             let n = rnd.next();
             let key = n as i32 % R;

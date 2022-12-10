@@ -10,30 +10,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate core;
+use crate::options::Options;
 
-use crate::error::Error;
+pub struct VersionSet {
 
-pub type Result<T = (), E = Error> = std::result::Result<T, E>;
+    dbname: String,
 
-pub mod db;
-pub mod error;
-pub mod slice;
-pub mod write_batch;
-pub mod comparator;
-pub mod log_writer;
-pub mod options;
+    last_sequence: u64,
 
-mod memtable;
-mod log;
-mod fs;
-mod filename;
-mod skiplist;
-mod dbformat;
-mod coding;
-mod random;
-mod env;
-mod util;
-mod log_format;
-mod log_reader;
-mod version_set;
+}
+
+impl VersionSet {
+
+    pub fn new(db_name: &str) -> Self {
+        VersionSet {
+            dbname: db_name.to_string(),
+            last_sequence: 0
+        }
+    }
+
+    pub fn last_sequence(&self) -> u64 {
+        self.last_sequence
+    }
+
+    pub fn set_last_sequence(&mut self, s: u64) {
+        assert!(s >= self.last_sequence);
+        self.last_sequence = s;
+    }
+}

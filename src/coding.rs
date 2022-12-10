@@ -12,6 +12,8 @@
 
 use std::fs::File;
 use std::io::Write;
+use crate::Error;
+use crate::slice::Slice;
 
 pub fn encode_varint32(buf: &mut [u8], v: u32, offset: usize) -> usize {
     const B: i32 = 128;
@@ -145,6 +147,20 @@ pub fn put_varint32(dst: &mut Vec<u8>, v: u32) -> usize {
     let mut buf = vec![0;5];
     let size = encode_varint32(&mut buf, v, 0);
     dst.write(&buf[..size]).expect("put varint32 failed")
+}
+
+pub fn put_length_prefixed_slice(dst: &mut Vec<u8>, value: &Slice) {
+    put_varint32(dst, value.size() as u32);
+    dst.extend_from_slice(value.data());
+}
+
+/// get a slice from input, return the slice result and the skip len
+/// before the start of the returned slice
+pub fn get_length_prefixed_slice(input: &[u8]) -> crate::Result<(Slice, usize)> {
+    match get_varint32(input, 0, input.len()) {
+        Ok((len, idx)) => Ok((Slice::from_bytes(&input[idx..idx+len as usize]), idx)),
+        Err(_) => Err(Error::Corruption)
+    }
 }
 
 #[cfg(test)]

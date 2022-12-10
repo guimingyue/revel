@@ -42,6 +42,16 @@ impl<'a> Slice<'a> {
     pub fn data(&self) -> &[u8]{
         self.data
     }
+
+    pub fn remove_prefix(&mut self, n: usize) {
+        assert!(n <= self.size);
+        self.data = &self.data[n..];
+        self.size -= n;
+    }
+
+    pub fn empty(&self) -> bool {
+        self.size == 0
+    }
 }
 
 #[test]

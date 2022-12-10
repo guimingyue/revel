@@ -10,8 +10,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::Write;
+use std::rc::Rc;
+use std::sync::Arc;
 use crate::coding::encode_fixed32;
 use crate::env::WritableFile;
 use crate::log_format::{kBlockSize, kHeaderSize, kMaxRecordType, RecordType};
@@ -20,7 +23,7 @@ use crate::Result;
 use crate::util::crc;
 
 pub struct Writer {
-    dest: Box<dyn WritableFile>,
+    dest: Rc<RefCell<dyn WritableFile>>,
 
     block_offset: usize,
 
@@ -35,11 +38,11 @@ pub fn init_type_crc(type_crc: &mut [u8]) {
 
 impl Writer {
 
-    pub fn new(dest: Box<dyn WritableFile>) -> Self {
+    pub fn new(dest: Rc<RefCell<dyn WritableFile>>) -> Self {
         Self::new_with_block_offset(dest, 0)
     }
 
-    pub fn new_with_block_offset(dest: Box<dyn WritableFile>, block_offset: usize) -> Self{
+    pub fn new_with_block_offset(dest: Rc<RefCell<dyn WritableFile>>, block_offset: usize) -> Self{
         let mut type_crc = [0 as u8; kMaxRecordType as usize + 1];
         init_type_crc(&mut type_crc);
         Writer {
@@ -64,7 +67,7 @@ impl Writer {
             if leftover < kHeaderSize {
                 if leftover > 0 {
                     // Switch to a new block
-                    self.dest.append(&Slice::from_bytes(&vec![0 as u8; leftover]))?
+                    self.dest.borrow_mut().append(&Slice::from_bytes(&vec![0 as u8; leftover]))?
                 }
                 self.block_offset = 0;
             }
@@ -108,11 +111,12 @@ impl Writer {
         encode_fixed32(&mut buf, crc, 0);
 
         // Write the header and the payload
-        self.dest.append(&Slice::from_bytes(&buf))?;
+        let mut appender = self.dest.borrow_mut();
+        appender.append(&Slice::from_bytes(&buf))?;
 
-        self.dest.append(&Slice::from_bytes(data))?;
+        appender.append(&Slice::from_bytes(data))?;
 
-        self.dest.flush()?;
+        appender.flush()?;
 
         self.block_offset += kHeaderSize + length;
 
@@ -127,7 +131,7 @@ mod tests {
 
     #[test]
     fn test() {
-        let writable_file = Box::new(MemoryWritableFile::new(Vec::new()));
+        let writable_file = Rc::new(RefCell::new(MemoryWritableFile::new(Vec::new())));
         let mut writer = Writer::new(writable_file);
         writer.add_record(&Slice::from_str("hello world")).expect("write failed");
     }
