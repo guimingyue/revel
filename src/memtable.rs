@@ -16,7 +16,7 @@ use std::cmp::Ordering::Less;
 use std::rc::Rc;
 use crate::coding::{decode_fixed64, encode_fixed64, encode_varint32, get_varint32, varint_length};
 use crate::comparator::Comparator;
-use crate::dbformat::{compare, InternalKeyComparator, LookupKey, SequenceNumber, ValueType};
+use crate::dbformat::{InternalKeyComparator, LookupKey, SequenceNumber, ValueType};
 use crate::{comparator, Error};
 use crate::Error::NotFound;
 use crate::skiplist::{Cmp, Iter, SkipList};

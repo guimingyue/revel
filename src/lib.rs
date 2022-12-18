@@ -37,3 +37,4 @@ mod util;
 mod log_format;
 mod log_reader;
 mod version_set;
+mod version_edit;

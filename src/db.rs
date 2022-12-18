@@ -19,15 +19,20 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use crate::options::{Options, ReadOptions, WriteOptions};
 use crate::{log_writer, Result};
 use crate::dbformat::{InternalKeyComparator, LookupKey};
-use crate::env::{PosixWritableFile, WritableFile};
+use crate::env::{create_dir, Env, new_writable_file, PosixWritableFile, remove_file, set_current_file, WritableFile};
+use crate::error::Error;
 use crate::error::Error::NotFound;
+use crate::filename::{current_file_name, descriptor_file_name, lock_file_name};
 use crate::memtable::MemTable;
 use crate::slice::Slice;
 use crate::util::crc::value;
+use crate::version_edit::VersionEdit;
 use crate::version_set::VersionSet;
 use crate::write_batch::{append, byte_size, insert_into, WriteBatch};
 
 pub struct DB {
+    dbname: String,
+
     logfile: Rc<RefCell<dyn WritableFile>>,
     // Queue of writers
     writers: Mutex<VecDeque<Writer>>,
@@ -38,7 +43,9 @@ pub struct DB {
 
     log: log_writer::Writer,
 
-    mem: MemTable
+    mem: MemTable,
+
+    env: Env,
 }
 
 impl DB {
@@ -55,15 +62,57 @@ impl DB {
             .open(path)? ;
         let logfile = Rc::new(RefCell::new(PosixWritableFile::new(str, file)));
         let internalKeyComparator = InternalKeyComparator::new(options.comparator);
-        let db = DB {
+        let mut db = DB {
+            dbname: str.to_string(),
             logfile: logfile.clone(),
             writers: Mutex::new(VecDeque::new()),
             versions: VersionSet::new(str),
             temp_batch: RefCell::new(WriteBatch::new()),
             log: log_writer::Writer::new(logfile.clone()),
-            mem: MemTable::new(internalKeyComparator)
+            mem: MemTable::new(internalKeyComparator),
+            env: Env::new()
         };
+        db.prepare();
         Ok(db)
+    }
+
+    /// Prepare the descriptor or recover from persistent storage.
+    /// For recovering, may do a significant amount of work to
+    /// recover recently logged updates. Any changes to be made to
+    /// the descriptor are returned by the VersionEdit return value.
+    fn prepare(&mut self) -> Result<()>{
+        let _ = create_dir(self.dbname.as_str());
+        self.env.lock_file(lock_file_name(self.dbname.as_str()).as_str())?;
+        if self.env.file_exists(current_file_name(self.dbname.as_str()).as_str()) {
+            self.new_db()?;
+        }
+        Ok(())
+    }
+
+    fn new_db(&mut self) -> Result<()> {
+        let mut new_db = VersionEdit::new("comparator", 0, 2, 0);
+        let manifest = descriptor_file_name(self.dbname.as_str(), 1);
+        match new_writable_file(manifest.as_str()) {
+            Ok(file) => {
+                let mut record = vec![];
+                new_db.encode_to(&mut record);
+                let mut log = log_writer::Writer::new(file.clone());
+                match log.add_record(&Slice::from_bytes(record.as_slice())) {
+                    Ok(_) => {
+                        file.borrow().sync()?;
+
+                        // Make "CURRENT" file points to the new mainfest file.
+                        set_current_file(self.dbname.as_str(), 1)?
+                    },
+                    Err(_) => {
+                        remove_file(manifest.as_str())?
+                    }
+                }
+                Ok(())
+            },
+            Err(e) => Err(e)
+        }
+
     }
 
     pub fn put(&mut self, opt: &WriteOptions, key: &Slice, value: &Slice) -> Result<()> {

@@ -9,8 +9,9 @@ This is an experimental project to learn LevelDB and to practice Rust when learn
 ## Project Status
 Now, this project is under development and the table list the progress.
 
-|feature|description|branch|status|
-------|--------|----|----|
-|memtable|memtable of leveldb using skiplist|https://github.com/guimingyue/revel/tree/memtable|done|
-|log reader and writer|log file reader and writer|https://github.com/guimingyue/revel/tree/log_appender|almost done|
-|write batch|write batch interface for db|https://github.com/guimingyue/revel/tree/write_batch|WIP|
+| feature               | description                        | branch                                                | status      |
+-----------------------|------------------------------------|-------------------------------------------------------|-------------|
+| memtable              | memtable of leveldb using skiplist | https://github.com/guimingyue/revel/tree/memtable     | done        |
+| log reader and writer | log file reader and writer         | https://github.com/guimingyue/revel/tree/log_appender | almost done |
+| write batch           | write batch interface for db       | https://github.com/guimingyue/revel/tree/write_batch  | done        |
+| new db                | create db meta files when opening a database   | https://github.com/guimingyue/revel/tree/new_db       | WIP         |

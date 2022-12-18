@@ -61,6 +61,23 @@ pub fn encode_fixed32(buf: &mut [u8], value: u32, offset: usize) -> usize {
     4
 }
 
+pub fn encode_varint64(buf: &mut [u8], mut v: u64, offset: usize) -> usize {
+    const B: u64 = 128;
+    let mut ptr = buf[offset..].as_mut_ptr();
+    let mut len = 0;
+    unsafe {
+        while v >= B {
+            ptr.write((v | B) as u8);
+            len += 1;
+            ptr = (ptr as isize).checked_add(1).unwrap() as *mut u8;
+            v = v >> 7;
+        }
+        ptr.write(v as u8);
+        len += 1;
+    }
+    len
+}
+
 /// todo!() inline this function
 pub fn encode_fixed64(buf: &mut [u8], value: u64, offset: usize) -> usize {
     let buffer = buf[offset..].as_mut_ptr();
@@ -149,6 +166,35 @@ pub fn put_varint32(dst: &mut Vec<u8>, v: u32) -> usize {
     dst.write(&buf[..size]).expect("put varint32 failed")
 }
 
+pub fn put_varint64(dst: &mut Vec<u8>, v: u64) -> usize {
+    let mut buf = vec![0; 10];
+    let size = encode_varint64(&mut buf, v, 0);
+    dst.write(&buf[0..size]).expect("put varint64 failed")
+}
+
+pub fn get_varint64(buf: &[u8], offset: usize, limit: usize) -> crate::Result<(u64, usize), &str> {
+    let mut result: u64 = 0;
+    let mut idx = offset;
+    let mut ptr = buf.as_ptr();
+    unsafe {
+        let mut shift: u32 = 0;
+        while shift <= 63 && idx < limit {
+            let byte = *ptr.offset(idx as isize);
+            idx += 1;
+            if byte & 128 != 0 {
+                // More bytes are present
+                result |= ((byte & 127) << shift) as u64;
+            } else {
+                result |= (byte << shift) as u64;
+                let len = idx - offset;
+                return Ok((result, len));
+            }
+            shift = shift + 7;
+        }
+    }
+    Err("ERROR")
+}
+
 pub fn put_length_prefixed_slice(dst: &mut Vec<u8>, value: &Slice) {
     put_varint32(dst, value.size() as u32);
     dst.extend_from_slice(value.data());
@@ -208,5 +254,47 @@ mod tests {
         }
         let result = get_varint32(buf.as_slice(), 0, buf.len()).expect("large value truncation failed");
         assert_eq!(large_value, result.0)
+    }
+
+    #[test]
+    fn test_coding_varint64() {
+        let mut b = vec![];
+        put_varint64(&mut b, 10);
+        let (v, len) = get_varint64(b.as_slice(), 0, b.len()).expect("failed");
+        assert_eq!(10, v);
+
+        // Construct the list of values to check
+        let mut values: Vec<u64> = vec![];
+        // Some special values
+        values.push(0);
+        values.push(100);
+        values.push(!0);
+        values.push(!0 - 1);
+        for k in 0..64 {
+            // Test values near powers of two
+            let power = (1 as u64) << k;
+            values.push(power);
+            values.push(power - 1);
+            values.push(power + 1);
+        }
+
+        let mut s = vec![];
+        for v in &values {
+            put_varint64(&mut s, *v);
+        }
+
+        let p = s.as_slice();
+        let mut offset = 0;
+        let limit = p.len();
+        // const char* limit = p + s.size();
+        for i in 0..values.len() {
+            let res = get_varint64(p, offset, limit);
+            assert!(res.is_ok());
+            let (value, len) = res.unwrap();
+            assert_eq!(values[i], value);
+            assert_eq!(varint_length(value), len);
+            offset += len;
+        }
+
     }
 }

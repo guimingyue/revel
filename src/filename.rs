@@ -26,13 +26,35 @@ fn write_string_to_file_sync() -> Result<bool> {
     Ok(true)
 }
 
-fn make_file_name(path: &str, number: u64, suffix: &str) -> Box<String> {
-    Box::new(format!("{}/{:06}.{}", path, number, suffix))
+fn make_file_name(path: &str, number: u64, suffix: &str) -> String {
+    format!("{}/{:06}.{}", path, number, suffix)
 }
 
 pub fn log_file_name(path: &str, number: u64) -> Box<String> {
     assert!(number > 0);
-    make_file_name(path, number, "log")
+    Box::new(make_file_name(path, number, "log"))
+}
+
+pub fn lock_file_name(dbname: &str) -> String {
+    file_name(dbname, "/LOCK")
+}
+
+pub fn current_file_name(dbname: &str) -> String {
+    file_name(dbname, "/CURRENT")
+}
+
+pub fn descriptor_file_name(dbname: &str, number: u64) -> String {
+    format!("{}/MANIFEST-{:06}.{}", dbname, number, "")
+}
+
+pub fn temp_file_name(dbname: &str, number: u64) -> String {
+    make_file_name(dbname, number, "dbtmp")
+}
+
+fn file_name(dbname: &str, name: &str) -> String {
+    let mut fname = dbname.to_string();
+    fname.push_str(name);
+    fname
 }
 
 #[test]

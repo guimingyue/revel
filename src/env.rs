@@ -12,17 +12,21 @@
 
 use std::cell::{RefCell, RefMut};
 use std::cmp::min;
+use std::collections::BTreeSet;
 use std::fs::{File, OpenOptions};
 use std::io::{Error, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::FileExt;
+use std::path::Path;
 use std::rc::Rc;
+use std::sync::Mutex;
 use crate::Error::IOError;
+use crate::filename::{current_file_name, descriptor_file_name, temp_file_name};
 use crate::Result;
 use crate::slice::Slice;
 
 /// posix env implementation
 
-pub fn new_writable_file(filename: &str) -> Result<Box<dyn WritableFile>>{
+pub fn new_writable_file(filename: &str) -> Result<Rc<RefCell<dyn WritableFile>>>{
     // todo!() O_CLOEXEC flag
     let opened_file = OpenOptions::new()
         .truncate(true)
@@ -31,10 +35,56 @@ pub fn new_writable_file(filename: &str) -> Result<Box<dyn WritableFile>>{
         .open(filename);
 
     match opened_file {
-        Ok(file) => Ok(Box::new(PosixWritableFile::new(filename, file))),
+        Ok(file) => Ok(Rc::new(RefCell::new(PosixWritableFile::new(filename, file)))),
         Err(err) => Err(crate::Error::from(err))
     }
 
+}
+
+pub fn remove_file(fname: &str) -> Result<()> {
+    // todo!()
+    Ok(())
+}
+
+pub fn rename_file(from: &str, to: &str) -> Result<()> {
+    // todo!()
+    Ok(())
+}
+
+pub fn set_current_file(dbname: &str, descriptor_number: u64) -> Result<()> {
+    let manifest = descriptor_file_name(dbname, descriptor_number);
+    let mut contents = Slice::from_str(manifest.as_str());
+    contents.remove_prefix(dbname.len() + 1);
+    let tmp = temp_file_name(dbname, descriptor_number);
+    let mut data = Vec::from(contents.data());
+    data.push('/' as u8);
+    match write_string_to_file_sync(&Slice::from_bytes(data.as_slice()), tmp.as_str(), true) {
+        Ok(_) => rename_file(tmp.as_str(), current_file_name(dbname).as_str())?,
+        Err(_) => remove_file(tmp.as_str())?
+    };
+    Ok(())
+}
+
+pub fn write_string_to_file_sync(data: &Slice, fname: &str, should_sync: bool) -> Result<()> {
+    let file = new_writable_file(fname)?;
+    match file.borrow_mut().append(data) {
+        Ok(_) => {
+            if should_sync {
+                file.borrow().sync()?
+            }
+        },
+        Err(_) => {
+            remove_file(fname)?
+        }
+    }
+    Ok(())
+}
+
+pub fn create_dir(dirname: &str) -> Result<()> {
+    match std::fs::create_dir(dirname) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(crate::Error::from(e))
+    }
 }
 
 pub trait WritableFile {
@@ -262,5 +312,55 @@ impl SequentialFile for MemorySequentialFile {
         let memory_offset = *self.offset.borrow() + n as usize;
         self.offset.replace(memory_offset);
         Ok(())
+    }
+}
+
+pub struct Env {
+
+    locks: LockTable
+
+}
+
+struct LockTable {
+
+    locked_files: Mutex<BTreeSet<String>>
+
+}
+
+impl LockTable {
+
+    fn new() -> Self {
+        LockTable {
+            locked_files: Mutex::new(BTreeSet::new())
+        }
+    }
+
+    fn insert(&mut self, fname: &str) -> bool {
+        let mut guard = self.locked_files.lock().unwrap();
+        guard.insert(fname.to_string())
+    }
+
+    fn remove(&mut self, fname: &str) {
+        let mut guard = self.locked_files.lock().unwrap();
+        guard.remove(fname);
+    }
+}
+
+impl Env {
+
+    pub fn new() -> Self{
+        Env {
+            locks: LockTable::new()
+        }
+    }
+
+    pub fn lock_file(&mut self, fname: &str) -> Result<()> {
+        // todo!()
+        Ok(())
+    }
+
+    /// Returns true iff the named file exists.
+    pub fn file_exists(&self, fname: &str) -> bool {
+        Path::new(fname).try_exists().is_ok()
     }
 }

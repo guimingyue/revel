@@ -132,10 +132,14 @@ fn pack_sequence_and_type(seq: u64, t: ValueType) -> u64 {
     (seq << 8) | t as u64
 }
 
+pub struct InternalKey {
+    
+    rep: Vec<u8>
+}
 
+impl InternalKey {
 
-
-pub fn compare(akey: &Slice, bkey: &Slice) -> std::cmp::Ordering {
-    // todo!()
-    std::cmp::Ordering::Equal
+    pub fn encode(&self) -> Slice {
+        Slice::from_bytes(&self.rep)
+    }
 }
