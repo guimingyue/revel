@@ -83,7 +83,7 @@ impl DB {
     fn prepare(&mut self) -> Result<()>{
         let _ = create_dir(self.dbname.as_str());
         self.env.lock_file(lock_file_name(self.dbname.as_str()).as_str())?;
-        if self.env.file_exists(current_file_name(self.dbname.as_str()).as_str()) {
+        if !self.env.file_exists(current_file_name(self.dbname.as_str()).as_str()) {
             self.new_db()?;
         }
         Ok(())

@@ -21,6 +21,7 @@ use std::rc::Rc;
 use std::sync::Mutex;
 use crate::Error::IOError;
 use crate::filename::{current_file_name, descriptor_file_name, temp_file_name};
+use crate::log_format::kBlockSize;
 use crate::Result;
 use crate::slice::Slice;
 
@@ -39,6 +40,16 @@ pub fn new_writable_file(filename: &str) -> Result<Rc<RefCell<dyn WritableFile>>
         Err(err) => Err(crate::Error::from(err))
     }
 
+}
+
+pub fn new_sequential_file(fname: &str) -> Result<Box<dyn SequentialFile>> {
+    let opened_file = OpenOptions::new()
+        .read(true)
+        .open(fname);
+    match opened_file {
+        Ok(file) => Ok(Box::new(PosixSequentialFile::new(fname, file))),
+        Err(error) => Err(crate::Error::from(error))
+    }
 }
 
 pub fn remove_file(fname: &str) -> Result<()> {
@@ -78,6 +89,32 @@ pub fn write_string_to_file_sync(data: &Slice, fname: &str, should_sync: bool) -
         }
     }
     Ok(())
+}
+
+pub fn read_file_to_bytes(fname: &str) -> Result<Vec<u8>> {
+    let mut data = vec![];
+    const KBufferSize: usize = 8192;
+    let mut scratch = vec![0; kBlockSize];
+    loop {
+        match new_sequential_file(fname) {
+            Ok(file) => {
+                match file.read(&mut scratch) {
+                    Ok(fragment) => {
+                        if fragment.size() == 0 {
+                            return Ok(data);
+                        }
+                        data.extend_from_slice(fragment.data());
+                    },
+                    Err(error) => {
+                        return Err(error);
+                    }
+                }
+            },
+            Err(error) => {
+                return Err(error);
+            }
+        }
+    }
 }
 
 pub fn create_dir(dirname: &str) -> Result<()> {
@@ -205,6 +242,16 @@ pub struct PosixSequentialFile {
     file: RefCell<File>,
 
     filename: String
+}
+
+impl PosixSequentialFile {
+
+    pub fn new(fname: &str, file: File) -> Self {
+        PosixSequentialFile {
+            filename: fname.to_string(),
+            file: RefCell::new(file)
+        }
+    }
 }
 
 impl SequentialFile for PosixSequentialFile {
