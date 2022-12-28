@@ -19,6 +19,10 @@ pub type SequenceNumber = u64;
 
 static kMaxSequenceNumber: SequenceNumber = ((1 as u64) << 56) - 1;
 
+pub mod config {
+    pub const kNumLevels:u32 = 7;
+}
+
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum ValueType {
     
@@ -132,6 +136,7 @@ fn pack_sequence_and_type(seq: u64, t: ValueType) -> u64 {
     (seq << 8) | t as u64
 }
 
+#[derive(Default)]
 pub struct InternalKey {
     
     rep: Vec<u8>
@@ -141,5 +146,10 @@ impl InternalKey {
 
     pub fn encode(&self) -> Slice {
         Slice::from_bytes(&self.rep)
+    }
+
+    pub fn decode_from(&mut self, s: &[u8]) -> bool {
+        self.rep.extend_from_slice(s);
+        !self.rep.is_empty()
     }
 }

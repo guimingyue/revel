@@ -16,6 +16,7 @@ path = "src/lib.rs"
 
 [dependencies]
 crc="3.0.0"
+enum-ordinalize="3.1.12"
 
 [profile.dev]
 opt-level = 0

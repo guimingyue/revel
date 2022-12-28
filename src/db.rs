@@ -27,7 +27,7 @@ use crate::memtable::MemTable;
 use crate::slice::Slice;
 use crate::util::crc::value;
 use crate::version_edit::VersionEdit;
-use crate::version_set::VersionSet;
+use crate::version_set::{Version, VersionSet};
 use crate::write_batch::{append, byte_size, insert_into, WriteBatch};
 
 pub struct DB {
@@ -37,7 +37,7 @@ pub struct DB {
     // Queue of writers
     writers: Mutex<VecDeque<Writer>>,
 
-    versions: VersionSet,
+    versions: Rc<RefCell<VersionSet>>,
 
     temp_batch: RefCell<WriteBatch>,
 
@@ -66,12 +66,15 @@ impl DB {
             dbname: str.to_string(),
             logfile: logfile.clone(),
             writers: Mutex::new(VecDeque::new()),
-            versions: VersionSet::new(str),
+            versions: Rc::new(RefCell::new(VersionSet::new(str))),
             temp_batch: RefCell::new(WriteBatch::new()),
             log: log_writer::Writer::new(logfile.clone()),
             mem: MemTable::new(internalKeyComparator),
             env: Env::new()
         };
+        {
+            db.versions.borrow_mut().append_version(Version::new(db.versions.clone()));
+        }
         db.prepare();
         Ok(db)
     }
@@ -131,7 +134,7 @@ impl DB {
         let snapshot;
         {
             let lock = self.writers.lock();
-            snapshot = self.versions.last_sequence();
+            snapshot = self.versions.borrow().last_sequence();
             drop(lock);
         }
         let lkey = LookupKey::new(key, snapshot);
@@ -146,7 +149,7 @@ impl DB {
         {
             let mut writers = self.writers.lock().unwrap();
             writers.push_back(Writer::new(updates, opt.sync));
-            last_sequence = self.versions.last_sequence();
+            last_sequence = self.versions.borrow_mut().last_sequence();
             self.build_batch_group(writers);
             let mut write_batch = self.temp_batch.borrow_mut();
             write_batch.set_sequence(last_sequence + 1);
@@ -163,7 +166,7 @@ impl DB {
         {
             // clean up
             self.temp_batch.borrow_mut().clear();
-            self.versions.set_last_sequence(last_sequence);
+            self.versions.borrow_mut().set_last_sequence(last_sequence);
         }
         Ok(())
     }
